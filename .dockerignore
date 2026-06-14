@@ -1,0 +1,16 @@
+# Keep the build context small. NOTE: .docker-build/ is intentionally NOT ignored —
+# the Makefile stages the skillspector checkout there for the build.
+.venv/
+.git/
+.gitignore
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+tests/
+.docker-build/skillspector/.git/
+.docker-build/skillspector/.venv/
