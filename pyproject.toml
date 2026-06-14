@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "skillspector-quality"
+version = "0.1.0"
+description = "Deterministic authoring quality scorer for Claude Code skills. Rates SKILL.md bundles 0–100 across nine dimensions: information density, readability, topic coverage, structural coherence, code maintainability, and more"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.14"
+keywords = ["skills", "quality", "rating", "claude-code", "skillspector"]
+dependencies = [
+    # skillspector is not published to PyPI: install it editable first
+    # (`pip install -e ../SkillRater`), then `pip install -e .` is satisfied
+    # by the already-installed editable package. See README.
+    # Pinned to an exact version: this layer imports upstream internals
+    # (resolve_input, build_context, the analyzer registry), so the upstream
+    # version is part of our contract. Bump deliberately after testing a sync.
+    "skillspector==2.1.4",
+    "typer>=0.12,<2",
+    "rich>=14.3.0",
+    "pyyaml>=6.0.1",
+]
+
+[project.scripts]
+skillspector-quality = "skillspector_quality.cli:app"
+
+[project.optional-dependencies]
+code = [
+    "radon>=6.0",
+]
+dev = [
+    "pytest>=9.0.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.15.0",
+    "mypy>=1.19.0",
+    "pre-commit>=3.0",
+    "radon>=6.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/skillspector_quality"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: end-to-end tests that may call LLMs"]
+addopts = "-m 'not integration' --cov=skillspector_quality --cov-report=term-missing --cov-fail-under=70"
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+ignore_missing_imports = true
