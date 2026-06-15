@@ -20,6 +20,16 @@ from skillspector_quality.quality.models import QualityReport
 
 _SKILLSPECTOR_VERSION = getattr(skillspector, "__version__", "")
 
+# Scope disclaimer that travels with every report. Guards against the "high score illusion":
+# a structurally perfect skill can still be logically broken. Content-correctness cannot be
+# measured deterministically, so the score never implies the skill actually works.
+QUALITY_CAVEAT = (
+    "Note: This score evaluates the structural quality and completeness of your instructions "
+    "(syntax, constraints, formatting). It does not guarantee content correctness, factual "
+    "accuracy, or prevent model hallucinations. Always functionally test your skill against "
+    "real-world inputs."
+)
+
 _SEV_COLOR: dict[str, str] = {
     "CRITICAL": "red",
     "HIGH": "red",
@@ -172,7 +182,7 @@ def unified_terminal_text(result: dict[str, Any], report: QualityReport) -> str:
             if c.earned == c.max
             else ("[yellow]~[/yellow]" if c.earned > 0 else "[red]x[/red]")
         )
-        kind_tag = "[dim]\[F][/dim]" if c.kind == "frontmatter" else "[dim]\[B][/dim]"
+        kind_tag = r"[dim]\[F][/dim]" if c.kind == "frontmatter" else r"[dim]\[B][/dim]"
         console.print(f"  {mark} {c.earned:>2}/{c.max:<2}  {kind_tag}  {c.name}")
         for _, _, label in c.items:
             console.print(f"      [dim]{label}[/dim]")
@@ -183,6 +193,7 @@ def unified_terminal_text(result: dict[str, Any], report: QualityReport) -> str:
         "no effect on token spend  "
         "[B] prompt body — raises score AND reduces token spend[/dim]"
     )
+    console.print(f"\n  [dim]{QUALITY_CAVEAT}[/dim]")
 
     return console.export_text()
 
@@ -210,12 +221,16 @@ def quality_markdown_section(report: QualityReport) -> str:
         for name, note in notes:
             lines.append(f"- **{name}:** {note}")
         lines.append("")
+    lines.append(f"> {QUALITY_CAVEAT}")
+    lines.append("")
     return "\n".join(lines)
 
 
 def quality_json_dict(report: QualityReport) -> dict[str, object]:
     """JSON 'quality_assessment' object (sibling of risk_assessment)."""
-    return report.to_dict()
+    data = report.to_dict()
+    data["caveat"] = QUALITY_CAVEAT
+    return data
 
 
 def quality_sarif_properties(report: QualityReport) -> dict[str, object]:
