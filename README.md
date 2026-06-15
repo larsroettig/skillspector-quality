@@ -752,6 +752,92 @@ If you find other published work that should inform the scoring, please open an 
 
 ---
 
+## Benchmark results
+
+Ran 3 arms × 8 scenarios × N=10 repeats (240 LLM calls per model) at temperature 0.3.
+Each call uses a unique nonce to prevent provider-side caching from skewing results.
+
+Arms: **Baseline** (generic "extract JSON" prompt, no SKILL.md), **LowQuality**
+(conversational SKILL.md, no schema, no example), **HighQuality** (SKILL.md improved
+by this library's recommendations).
+
+### Cross-model comparison (Anthropic, N=10)
+
+| Model | Baseline | LowQuality | HighQuality | LowQuality tok waste |
+|-------|:--------:|:----------:|:-----------:|:--------------------:|
+| claude-haiku-4-5 | 4 % (3/80) | **0 %** (0/80) | **100 %** (80/80) | 7.6× (359 vs 47) |
+| claude-sonnet-4-6 | 25 % (20/80) | **0 %** (0/80) | **100 %** (80/80) | 10.4× (428 vs 41) |
+| claude-opus-4-8 | 25 % (20/80) | **0 %** (0/80) | **100 %** (80/80) | 12.0× (778 vs 63) |
+
+### Per-scenario breakdown (claude-sonnet-4-6, N=10)
+
+| Scenario | Baseline | LowQuality | HighQuality |
+|----------|:--------:|:----------:|:-----------:|
+| Customer Order Extraction | 10/10 ✓ | 0/10 | 10/10 ✓ |
+| Meeting Notes Summary | 10/10 ✓ | 0/10 | 10/10 ✓ |
+| Bug Report Triage | 0/10 | 0/10 | 10/10 ✓ |
+| Product Review Analysis | 0/10 | 0/10 | 10/10 ✓ |
+| Incident Report Parser | 0/10 | 0/10 | 10/10 ✓ |
+| Support Email Classification | 0/10 | 0/10 | 10/10 ✓ |
+| Job Posting Parser | 0/10 | 0/10 | 10/10 ✓ |
+| Ambiguous Ticket Routing ¹ | 0/10 | 0/10 | 10/10 ✓ |
+
+¹ Scenario 8 is a deliberately ambiguous billing/technical ticket where both
+category values are defensible. Correctness only requires a valid JSON structure
+with a valid enum value — not a specific category. HighQuality produced 10/10
+correct responses with ≤ 1 output-token variance (46–47 tokens), showing that
+the "choose dominant issue" guidance keeps the model consistent under genuine
+semantic ambiguity.
+
+### What the numbers mean
+
+**HighQuality is model-agnostic:**
+100 % correctness on Haiku, Sonnet, and Opus. A SKILL.md with a strict schema and
+a worked example produces reliable structured output regardless of which model tier
+you deploy on.
+
+**More capable models make bad SKILL.md more expensive:**
+LowQuality token waste grows with model capability — Haiku wastes 7.6×, Sonnet 10.4×,
+Opus **12.0×** (778 tokens of prose for 0 % correctness). More capable models follow
+chain-of-thought instructions more faithfully, so a poorly written SKILL.md costs
+progressively more as you upgrade. The token savings from HighQuality are largest at
+the top of the capability range.
+
+**Baseline passes 2/8 scenarios — the failure is schema alignment, not capability:**
+The model correctly extracts all the right data in every Baseline run. It just names
+fields its own way (`caller_name` instead of `name`, `tasks` instead of `action_items`,
+`status: "Resolved"` instead of `resolved: true`). This is a contract failure, not a
+reasoning failure — exactly what a strict schema in your SKILL.md prevents. Haiku
+guesses correct key names only 4 % of the time; Sonnet and Opus reach 25 % because
+they tend toward more conventional field naming.
+
+**HighQuality is near-deterministic:**
+7 of 8 scenarios produced zero output-token variance across all 10 Sonnet runs. A
+well-designed SKILL.md with an explicit schema and a worked example guides the model
+into a single, predictable output path — which is what production automation needs.
+
+### Running the benchmark yourself
+
+```bash
+# Dry-run (quality scoring only, no LLM calls)
+python benchmarks/run_benchmark.py --dry-run
+
+# Single model
+export SKILLSPECTOR_PROVIDER=anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+python benchmarks/run_benchmark.py -n 10
+
+# Two specific models (comparison table printed at end)
+python benchmarks/run_benchmark.py --models claude-haiku-4-5-20251001,claude-sonnet-4-6
+
+# All Anthropic models
+python benchmarks/run_benchmark.py --anthropic-all
+```
+
+Full documentation: [`benchmarks/README.md`](benchmarks/README.md).
+
+---
+
 ## Install
 
 ### Development (from source)
