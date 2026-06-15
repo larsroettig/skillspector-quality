@@ -56,7 +56,10 @@ indent-style = "space"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["integration: end-to-end tests that may call LLMs"]
+markers = [
+    "integration: end-to-end tests that may call LLMs",
+    "self: scores the tool's own SKILL.md documentation",
+]
 addopts = "-m 'not integration' --cov=skillspector_quality --cov-report=term-missing --cov-fail-under=70"
 
 [tool.mypy]

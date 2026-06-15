@@ -172,11 +172,17 @@ def unified_terminal_text(result: dict[str, Any], report: QualityReport) -> str:
             if c.earned == c.max
             else ("[yellow]~[/yellow]" if c.earned > 0 else "[red]x[/red]")
         )
-        console.print(f"  {mark} {c.earned:>2}/{c.max:<2}  {c.name}")
+        kind_tag = "[dim]\[F][/dim]" if c.kind == "frontmatter" else "[dim]\[B][/dim]"
+        console.print(f"  {mark} {c.earned:>2}/{c.max:<2}  {kind_tag}  {c.name}")
         for _, _, label in c.items:
             console.print(f"      [dim]{label}[/dim]")
         if c.notes:
             console.print(f"      [cyan]tip:[/cyan] {c.notes}")
+    console.print(
+        "\n  [dim][F] frontmatter — raises score; "
+        "no effect on token spend  "
+        "[B] prompt body — raises score AND reduces token spend[/dim]"
+    )
 
     return console.export_text()
 
@@ -192,10 +198,11 @@ def quality_markdown_section(report: QualityReport) -> str:
     lines.append("\n## Quality Assessment\n")
     lines.append(f"**Score:** {report.score}/100  ")
     lines.append("")
-    lines.append("| Category | Score |")
-    lines.append("|----------|-------|")
+    lines.append("| Category | Kind | Score |")
+    lines.append("|----------|------|-------|")
     for c in report.categories:
-        lines.append(f"| {c.name} | {c.earned}/{c.max} |")
+        kind_label = "frontmatter" if c.kind == "frontmatter" else "body"
+        lines.append(f"| {c.name} | {kind_label} | {c.earned}/{c.max} |")
     lines.append("")
     notes = [(c.name, c.notes) for c in report.categories if c.notes]
     if notes:

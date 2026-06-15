@@ -12,6 +12,16 @@ from skillspector_quality.quality.scorers import CATEGORY_SCORERS, SkillDoc
 
 __all__ = ["score_quality", "QualityReport", "CategoryScore", "SkillDoc"]
 
+# Dimensions whose primary signal comes from YAML frontmatter fields.
+# The frontmatter is stripped before the skill body reaches the LLM, so improvements
+# here raise the quality score but do NOT reduce token spend or change LLM output.
+# All other dimensions score the prompt body and predict real LLM efficiency.
+_FRONTMATTER_CATEGORY_NAMES: frozenset[str] = frozenset({
+    "Metadata & Discovery",    # name, description, when_to_use, author, version
+    "Behavioral Configuration", # user-invocable, allowed-tools, effort, …
+    "Topic Coverage",           # cosine(description, body) — description is frontmatter
+})
+
 
 def score_quality(file_cache: dict[str, str]) -> QualityReport:
     """Compute the quality report for a skill from its file_cache.
@@ -29,7 +39,8 @@ def score_quality(file_cache: dict[str, str]) -> QualityReport:
             continue  # N/A dimension: omit so its weight renormalizes away
         earned = sum(e for e, _, _ in items)
         cat_max = sum(m for _, m, _ in items)
-        categories.append(CategoryScore(name=name, earned=earned, max=cat_max, items=items))
+        kind = "frontmatter" if name in _FRONTMATTER_CATEGORY_NAMES else "body"
+        categories.append(CategoryScore(name=name, earned=earned, max=cat_max, items=items, kind=kind))
 
     total_earned = sum(c.earned for c in categories)
     total_max = sum(c.max for c in categories)
