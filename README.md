@@ -21,6 +21,7 @@ The scoring dimensions are grounded in peer-reviewed research; see [Research bas
 ## Table of contents
 
 - [How it works](#how-it-works)
+- [What this measures — and what it does not](#what-this-measures--and-what-it-does-not)
 - [Quick start](#quick-start)
 - [CI/CD integration](#cicd-integration)
   - [GitHub Actions — fail PR if score is too low](#github-actions--fail-pr-if-score-is-too-low)
@@ -76,6 +77,49 @@ Input path
   never size. More genuinely useful content always helps.
 - **N/A dimensions.** A dimension that does not apply (e.g. no scripts → Code Maintainability
   is N/A) is omitted from the denominator, so its weight renormalizes away automatically.
+
+---
+
+## What this measures — and what it does not
+
+**This tool scores how well-*formed* a skill is, not whether it actually *works*.**
+
+### The "high score illusion"
+
+Deterministic grading is good at measuring what can be parsed: clear boundaries and
+parameters, a defined persona/context, explicit constraints ("output JSON", "under 500
+words"), and the absence of syntax errors or contradictory formatting. When those structural
+elements are present, a skill scores high — even if it commands the model to do something
+illogical, impossible, or conceptually flawed. A structurally perfect prompt can still be
+logically broken, and that leads straight to confusion and hallucination.
+
+The real danger is **false confidence**: a developer who sees `95/100` intuitively reads it as
+"ready for production." If the tool isn't explicit about what the number means, that creates a
+blind spot where structurally perfect but logically broken skills ship to users. Structural
+scoring is **step one**; runtime testing and semantic validation against real inputs is
+**step two** — the score never replaces it.
+
+### Why, dimension by dimension
+
+Every dimension is a measure of form, structure, or style — none of them can verify that the
+skill's instructions are *correct*. Content-correctness cannot be measured deterministically,
+so a skill can earn a high score and still be wrong in ways that lead an agent into confusion
+or hallucination. Concretely:
+
+- **Topic Coverage** checks that the description and body share vocabulary (TF-IDF cosine) —
+  not that the description is *accurate* or the instructions are *right*.
+- **Code Maintainability** measures how clean the code *looks* (radon MI / complexity /
+  docstrings) — a tidy, well-documented function can still be silently buggy.
+- **Information Density, Lexical Diversity, Readability** reward non-redundant, varied, readable
+  prose — confident but *incorrect* instructions score just as well as correct ones.
+- **Structural Coherence, Example Quality, Progressive Disclosure** check that content is
+  linked, headed, and paired — not that the example outputs are what the code actually produces.
+
+A high score means a skill is **clear, well-structured, and cheap for an agent to consume** —
+a necessary but *not sufficient* condition for quality. Treat it as a linter for craft, not a
+correctness oracle. Validating that a skill *does the right thing* still requires human review
+and real-world testing. (The optional LLM commentary can surface some content concerns, but it
+is advisory, off by default, non-deterministic, and never affects the score.)
 
 ---
 
