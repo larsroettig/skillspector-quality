@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "skillspector-quality"
-version = "0.1.0"
+version = "1.1.0"
 description = "Deterministic authoring quality scorer for Claude Code skills. Rates SKILL.md bundles 0–100 across nine dimensions: information density, readability, topic coverage, structural coherence, code maintainability, and more"
 readme = "README.md"
 license = "MIT"
