@@ -1,8 +1,8 @@
 # skillspector-quality
 
 <img width="1584" height="672" alt="Firefly_The image, watermarked_img_3618978183344880806 png, features a modern, futuristic cor 275505" src="https://github.com/user-attachments/assets/26dacee1-5400-4f15-9a10-e062002e8a84" />
-
-
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/13383/badge)](https://www.bestpractices.dev/projects/13383)
 
 > **Proposal.** This project is in active development and welcomes community input.
 > PRs, new dimensions, weight-adjustment proposals, and CI recipes are all appreciated —
