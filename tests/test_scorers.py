@@ -7,13 +7,20 @@ import pathlib
 from skillspector_quality.quality import score_quality
 from skillspector_quality.quality.scorers import (
     SkillDoc,
+    _body,
     _build_idf,
     _compression_ratio,
     _cosine,
+    _hdd,
+    _is_acyclic,
     _mtld,
     _ngram_dup,
+    _other_script_quality,
+    _parse_frontmatter,
     _python_maintainability,
     _readability_grades,
+    _relative_targets,
+    _resolve_target,
     _terms,
     _tfidf_vec,
     _when_specificity,
@@ -21,6 +28,7 @@ from skillspector_quality.quality.scorers import (
     dim_code_maintainability,
     dim_example_quality,
     dim_information_density,
+    dim_lexical_diversity,
     dim_metadata,
     dim_progressive_disclosure,
     dim_structural_coherence,
@@ -414,6 +422,243 @@ def test_behavioral_config_invalid_shell_penalized() -> None:
     assert sum(e for e, _, _ in dim_behavioral_config(good, 10)) > sum(
         e for e, _, _ in dim_behavioral_config(bad, 10)
     )
+
+
+def test_behavioral_config_argument_hint_without_arguments() -> None:
+    # argument-hint set without arguments: unusual but not penalized (0.8 signal)
+    doc = _doc("---\nname: s\nargument-hint: '[query]'\n---\n# T\n")
+    items = dim_behavioral_config(doc, 10)
+    assert items  # not N/A
+    labels = " ".join(lbl for _, _, lbl in items)
+    assert "argument-hint" in labels
+
+
+def test_behavioral_config_disable_model_invocation() -> None:
+    valid = _doc("---\nname: s\ndisable-model-invocation: true\n---\n# T\n")
+    invalid = _doc("---\nname: s\ndisable-model-invocation: maybe\n---\n# T\n")
+    good_score = sum(e for e, _, _ in dim_behavioral_config(valid, 10))
+    bad_score = sum(e for e, _, _ in dim_behavioral_config(invalid, 10))
+    assert good_score > bad_score
+
+
+def test_behavioral_config_model_field() -> None:
+    doc = _doc("---\nname: s\nmodel: claude-sonnet-4-6\n---\n# T\n")
+    items = dim_behavioral_config(doc, 10)
+    labels = " ".join(lbl for _, _, lbl in items)
+    assert "model" in labels
+
+
+# --- private helper edge cases ----------------------------------------------- #
+
+
+def test_parse_frontmatter_yaml_error_returns_empty() -> None:
+    # Malformed YAML produces a YAMLError → empty dict returned
+    result = _parse_frontmatter("---\nkey: [\n---\n# Body\n")
+    assert result == {}
+
+
+def test_parse_frontmatter_non_dict_yaml_returns_empty() -> None:
+    # YAML that parses to a list (not dict) → empty dict
+    result = _parse_frontmatter("---\n- item1\n- item2\n---\n# Body\n")
+    assert result == {}
+
+
+def test_body_unclosed_frontmatter() -> None:
+    # Opening --- without closing --- → everything after first line is body
+    text = "---\nname: s\nsome content after\n"
+    b = _body(text)
+    assert "some content after" in b
+    assert "name: s" in b  # the unclosed YAML becomes part of the body text
+
+
+def test_body_unclosed_no_newline() -> None:
+    # Opening --- with no newline at all → empty body
+    b = _body("---")
+    assert b == ""
+
+
+def test_compression_ratio_empty_returns_zero() -> None:
+    assert _compression_ratio("") == 0.0
+
+
+def test_hdd_too_short_returns_none() -> None:
+    assert _hdd(["a", "b", "c"], sample_size=42) is None
+
+
+def test_hdd_long_enough_returns_float() -> None:
+    tokens = ["word"] * 50 + ["other"] * 50
+    result = _hdd(tokens, sample_size=42)
+    assert result is not None
+    assert 0.0 < result < 1.0
+
+
+def test_mtld_empty_tokens_returns_zero() -> None:
+    from skillspector_quality.quality.scorers import _mtld
+    assert _mtld([]) == 0.0
+
+
+def test_relative_targets_filters_urls_and_anchors() -> None:
+    text = "[link](https://example.com) [local](reference.md) [anchor](#section)"
+    targets = _relative_targets(text)
+    assert "https://example.com" not in targets
+    assert "#section" not in targets
+    assert "reference.md" in targets
+
+
+def test_relative_targets_strips_dotslash() -> None:
+    text = "[local](./reference.md)"
+    targets = _relative_targets(text)
+    assert "reference.md" in targets
+    assert "./reference.md" not in targets
+
+
+def test_resolve_target_trailing_slash() -> None:
+    keys = {"reference/api.md", "reference/guide.md"}
+    result = _resolve_target("reference/", keys)
+    assert result in keys
+
+
+def test_resolve_target_partial_basename_match() -> None:
+    keys = {"docs/reference.md"}
+    result = _resolve_target("reference.md", keys)
+    assert result == "docs/reference.md"
+
+
+def test_resolve_target_no_match_returns_none() -> None:
+    result = _resolve_target("nonexistent.md", {"SKILL.md"})
+    assert result is None
+
+
+def test_is_acyclic_detects_cycle() -> None:
+    adj: dict[str, set[str]] = {
+        "a": {"b"},
+        "b": {"c"},
+        "c": {"a"},  # cycle back to a
+    }
+    assert _is_acyclic(adj) is False
+
+
+def test_is_acyclic_no_cycle() -> None:
+    adj: dict[str, set[str]] = {"a": {"b"}, "b": {"c"}, "c": set()}
+    assert _is_acyclic(adj) is True
+
+
+def test_python_maintainability_syntax_error_in_ast() -> None:
+    # Code that parses for MI but fails ast.parse (shouldn't happen normally,
+    # but we force the SyntaxError branch via broken syntax)
+    invalid = "def foo(:\n    pass\n"
+    s, m = _python_maintainability(invalid)
+    # Either returns 0.0 (unparseable via mi_visit) or proceeds with dc=0.0
+    assert 0.0 <= s <= 1.0
+
+
+def test_other_script_quality_empty_returns_zero() -> None:
+    assert _other_script_quality("script.sh", "") == 0.0
+    assert _other_script_quality("script.sh", "   \n  \n") == 0.0
+
+
+def test_other_script_quality_shell_with_shebang() -> None:
+    code = "#!/bin/bash\n# This script does something\necho hello\n"
+    score = _other_script_quality("script.sh", code)
+    assert score > 0.0
+
+
+def test_other_script_quality_non_shell() -> None:
+    code = "// JavaScript comment\nfunction doSomething() { return 1; }\n"
+    score = _other_script_quality("utils.js", code)
+    assert 0.0 <= score <= 1.0
+
+
+# --- dimension edge cases ----------------------------------------------------- #
+
+
+def test_information_density_thin_or_repeated_content() -> None:
+    # Repeated/simple content should produce a non-dense label
+    thin = _doc("---\ndescription: d\n---\n# T\n" + ("word " * 30))
+    result = dim_information_density(thin, 15)
+    assert result  # not N/A
+    _, _, label = result[0]
+    # Covers the non-dense branches: thin or repeated phrases
+    assert any(phrase in label for phrase in ("thin", "Repeated", "dense"))
+
+
+def test_lexical_diversity_medium() -> None:
+    # Medium diversity: enough tokens but not very varied
+    medium_text = (
+        "---\ndescription: d\n---\n"
+        + ("The system processes the data and the data is processed by the system. " * 5)
+    )
+    doc = _doc(medium_text)
+    result = dim_lexical_diversity(doc, 6)
+    if result:  # may be N/A if tokens < 50
+        _, _, label = result[0]
+        assert "word" in label.lower() or "vocabular" in label.lower()
+
+
+def test_lexical_diversity_low() -> None:
+    # Very repetitive text → low diversity label
+    repetitive = "---\ndescription: d\n---\n" + ("spam eggs spam eggs spam eggs " * 10)
+    doc = _doc(repetitive)
+    result = dim_lexical_diversity(doc, 6)
+    if result:
+        _, _, label = result[0]
+        assert any(word in label.lower() for word in ("repetitive", "varied", "vocabular"))
+
+
+def test_topic_coverage_low_match() -> None:
+    # Description about unrelated topic → low coverage
+    doc = _doc(
+        "---\ndescription: cake baking flour sugar oven\n---\n"
+        "# Invoice\nParse invoice vendor totals and line items.\n"
+    )
+    result = dim_topic_coverage(doc, 15)
+    assert result
+    earned, mx, label = result[0]
+    assert earned < mx
+    assert "match" in label.lower() or "description" in label.lower()
+
+
+def test_structural_coherence_cyclic_links() -> None:
+    # a.md → b.md → a.md (cycle)
+    body = "---\nd: 1\n---\n# T\nSee [a](a.md).\n"
+    doc = _doc(body, **{"a.md": "See [b](b.md).\n", "b.md": "See [a](a.md).\n"})
+    result = dim_structural_coherence(doc, 13)
+    assert result  # should still return a score
+    # The cycle is detected; score may be lower but shouldn't crash
+
+
+def test_code_maintainability_medium_quality() -> None:
+    # Code with some docs but complex functions → medium label
+    medium_code = "\n".join(
+        [
+            "def process(a, b, c, d, e):",
+            "    if a > 0:",
+            "        if b > 0:",
+            "            return a + b",
+            "        return b",
+            "    return 0",
+        ]
+    )
+    doc = _doc("---\nd: 1\n---\n# T\n", **{"scripts/run.py": medium_code})
+    result = dim_code_maintainability(doc, 15)
+    assert result
+    _, _, label = result[0]
+    assert "script" in label
+
+
+def test_progressive_disclosure_notoc_advisory() -> None:
+    # A long supporting doc (>100 lines) without a TOC triggers the advisory note
+    long_doc = "\n".join(f"Line {i}.\n" for i in range(120))
+    body = (
+        "---\nname: s\ndescription: d\n---\n# T\n"
+        + ("Detail.\n" * 200)
+        + "\nSee [reference](reference.md).\n"
+    )
+    doc = _doc(body, **{"reference.md": long_doc})
+    result = dim_progressive_disclosure(doc, 8)
+    assert result
+    _, _, label = result[0]
+    assert "advisory" in label or "table of contents" in label.lower() or "toc" in label.lower()
 
 
 def test_behavioral_config_context_fork_without_agent_penalized() -> None:

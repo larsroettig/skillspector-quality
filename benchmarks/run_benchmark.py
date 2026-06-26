@@ -49,17 +49,16 @@ import sys
 import textwrap
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 _REPO_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
-from skillspector_quality.quality import score_quality  # noqa: E402
-
 from benchmarks.scenarios import SCENARIOS, Arm, Scenario  # noqa: E402
 from benchmarks.validators import validate  # noqa: E402
+from skillspector_quality.quality import score_quality  # noqa: E402
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
@@ -277,7 +276,7 @@ def _explain_llm_error(exc: Exception, provider: str, model: str, base_url: str 
         if is_local:
             print(f"\n❌  Model '{model}' not found in Ollama.")
             print(f"    Pull it first:        ollama pull {model}")
-            print(f"    List pulled models:   ollama list")
+            print("    List pulled models:   ollama list")
         else:
             print(f"\n❌  Model '{model}' not found at {base_url or 'the endpoint'}.")
             print("    Check SKILLSPECTOR_MODEL or the provider's model catalogue.")
@@ -315,12 +314,12 @@ def _call_llm(
     t0 = time.time()
     try:
         if provider == "anthropic":
-            kwargs: dict[str, Any] = dict(
-                model=model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=temperature,
-            )
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature,
+            }
             try:
                 response = client.messages.create(**kwargs)
             except Exception as exc:
@@ -363,7 +362,7 @@ def _call_llm(
 
 def _list_ollama_models(base_url: str) -> list[str]:
     try:
-        from openai import OpenAI, APIConnectionError  # noqa: PLC0415
+        from openai import APIConnectionError, OpenAI  # noqa: PLC0415
     except ImportError:
         print("❌  openai package not installed.  Run: pip install openai")
         sys.exit(1)
@@ -467,7 +466,7 @@ def _markdown_report(
     base_url: str,
 ) -> str:
     """Build the markdown result file content."""
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.UTC)
     date_str = now.strftime("%Y-%m-%d")
     arm_names = ["Baseline", "LowQuality", "HighQuality"]
 
@@ -479,7 +478,7 @@ def _markdown_report(
     lines.append(f"**Repeats:** {n_repeats} per cell  ")
     lines.append(f"**Temperature:** {temperature}  ")
     lines.append(f"**Scenarios:** {len(scenarios)}  ")
-    lines.append(f"**Arms:** Baseline · LowQuality · HighQuality  ")
+    lines.append("**Arms:** Baseline · LowQuality · HighQuality  ")
     lines.append("")
     lines.append("## Method")
     lines.append("")
@@ -514,7 +513,7 @@ def _markdown_report(
     lines.append("")
     lines.append("## Aggregate")
     lines.append("")
-    lines.append(f"| Arm | Avg body score | Output tok (med) | Correct rate |")
+    lines.append("| Arm | Avg body score | Output tok (med) | Correct rate |")
     lines.append("|-----|:--------------:|:----------------:|:------------:|")
     for arm_name in arm_names:
         arm_results = [r for r in all_results if r.arm == arm_name]
@@ -559,7 +558,7 @@ def _save_markdown(
     base_url: str,
 ) -> Path:
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    date_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    date_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
     slug = _model_slug(model)
     provider_slug = provider.replace("_", "-")
     path = _RESULTS_DIR / f"{date_str}-{provider_slug}-{slug}.md"
@@ -578,7 +577,7 @@ def _save_json(
     temperature: float,
 ) -> Path:
     _RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    date_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    date_str = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
     slug = _model_slug(model)
     provider_slug = provider.replace("_", "-")
     path = _RESULTS_DIR / f"{date_str}-{provider_slug}-{slug}.json"
@@ -709,9 +708,9 @@ def main(dry_run: bool = False, n_repeats: int = N_REPEATS) -> None:
 
     sep = "═" * 74
     print(f"\n{sep}")
-    print(f"  skillspector-quality Benchmark")
+    print("  skillspector-quality Benchmark")
     if dry_run:
-        print(f"  (dry-run: quality scoring only, no LLM calls)")
+        print("  (dry-run: quality scoring only, no LLM calls)")
     else:
         print(
             f"  provider={_provider_display(provider, base_url)}  "
@@ -720,7 +719,7 @@ def main(dry_run: bool = False, n_repeats: int = N_REPEATS) -> None:
     print(sep)
 
     # ── Quality scores (always shown, even in dry-run) ────────────────────────
-    print(f"\n  Quality scores per arm (body = dimensions that reach the LLM):\n")
+    print("\n  Quality scores per arm (body = dimensions that reach the LLM):\n")
     arm_header_done = False
     for scenario in SCENARIOS:
         if not arm_header_done:
@@ -831,7 +830,7 @@ def main_ollama_all(n_repeats: int = N_REPEATS_OLLAMA_ALL) -> None:
     # ── Cross-model comparison table ─────────────────────────────────────────
     width = 76
     print(f"\n{'═' * width}")
-    print(f"  CROSS-MODEL COMPARISON  (★ = benchmark reference)")
+    print("  CROSS-MODEL COMPARISON  (★ = benchmark reference)")
     print(f"{'═' * width}")
     print(
         f"  {'Model':<30} {'Arm':<14} {'Out-tok(med)':>12}  {'Correct':>8}"
@@ -907,7 +906,7 @@ def main_anthropic_all(n_repeats: int = N_REPEATS_ANTHROPIC_ALL) -> None:
     # ── Cross-model comparison ────────────────────────────────────────────────
     width = 76
     print(f"\n{'═' * width}")
-    print(f"  CROSS-MODEL COMPARISON  (Anthropic)")
+    print("  CROSS-MODEL COMPARISON  (Anthropic)")
     print(f"{'═' * width}")
     print(f"  {'Model':<32} {'Arm':<14} {'Out-tok(med)':>12}  {'Correct':>8}")
     print(f"  {'─' * (width - 2)}")

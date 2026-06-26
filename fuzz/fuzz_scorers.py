@@ -15,7 +15,7 @@ with atheris.instrument_imports():
 
 
 @atheris.instrument_func
-def TestOneInput(data: bytes) -> None:
+def TestOneInput(data: bytes) -> None:  # noqa: N802 — atheris requires PascalCase
     fdp = atheris.FuzzedDataProvider(data)
     text = fdp.ConsumeUnicodeNoSurrogates(len(data))
 

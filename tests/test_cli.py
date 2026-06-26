@@ -54,6 +54,78 @@ def test_scan_nonexistent_path_exits_two() -> None:
     assert result.exit_code == 2
 
 
+def test_scan_verbose_flag() -> None:
+    result = RUNNER.invoke(app, ["scan", GOOD_FIXTURE, "--no-llm", "--verbose"])
+    assert result.exit_code == 0, result.output
+
+
+def test_scan_output_file_non_integration(tmp_path: pathlib.Path) -> None:
+    import json
+
+    out = tmp_path / "report.json"
+    result = RUNNER.invoke(
+        app, ["scan", GOOD_FIXTURE, "--no-llm", "--format", "json", "--output", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    data = json.loads(out.read_text())
+    assert "quality_assessment" in data
+
+
+def test_scan_high_risk_score_exits_one(tmp_path: pathlib.Path) -> None:
+    """When the stub returns risk_score > 50 the CLI exits with code 1."""
+    from unittest.mock import patch
+
+    high_risk_state = {
+        "quality_report": {"score": 80, "categories": []},
+        "risk_score": 99,
+        "report_body": "{}",
+    }
+    with patch("skillspector_quality.cli.graph") as mock_graph:
+        mock_graph.invoke.return_value = high_risk_state
+        result = RUNNER.invoke(app, ["scan", GOOD_FIXTURE, "--no-llm"])
+    assert result.exit_code == 1
+
+
+def test_scan_merge_json_invalid_report_body(tmp_path: pathlib.Path) -> None:
+    """Invalid JSON in report_body should not crash — falls back to empty dict."""
+    from unittest.mock import patch
+
+    broken_state = {
+        "quality_report": {"score": 70, "categories": []},
+        "risk_score": 0,
+        "report_body": "NOT_JSON",
+    }
+    with patch("skillspector_quality.cli.graph") as mock_graph:
+        mock_graph.invoke.return_value = broken_state
+        result = RUNNER.invoke(app, ["scan", GOOD_FIXTURE, "--no-llm", "--format", "json"])
+    assert result.exit_code == 0, result.output
+
+
+def test_scan_sarif_format() -> None:
+    result = RUNNER.invoke(app, ["scan", GOOD_FIXTURE, "--no-llm", "--format", "sarif"])
+    assert result.exit_code == 0, result.output
+
+
+def test_scan_cleans_up_temp_dir() -> None:
+    """temp_dir_for_cleanup inside tempfile.gettempdir() is removed after the scan."""
+    import os
+    import tempfile
+    from unittest.mock import patch
+
+    temp_dir = tempfile.mkdtemp()
+    state = {
+        "quality_report": {"score": 60, "categories": []},
+        "risk_score": 0,
+        "report_body": "{}",
+        "temp_dir_for_cleanup": temp_dir,
+    }
+    with patch("skillspector_quality.cli.graph") as mock_graph:
+        mock_graph.invoke.return_value = state
+        RUNNER.invoke(app, ["scan", GOOD_FIXTURE, "--no-llm"])
+    assert not os.path.exists(temp_dir)
+
+
 @pytest.mark.integration
 def test_scan_output_file(tmp_path: pathlib.Path) -> None:
     out = tmp_path / "report.json"
