@@ -8,7 +8,7 @@
 # not a bare `docker build`.
 
 # --- builder: install everything into a self-contained venv ------------------
-FROM python:3.13-slim AS builder
+FROM python:3.13-slim@sha256:af5bd286051a06b38587d30a8638958f4a2f38381aa80fe859c740af3411bd4d AS builder
 
 # uv for fast, reproducible installs.
 COPY --from=ghcr.io/astral-sh/uv:0.5.21 /uv /uvx /bin/
@@ -32,7 +32,7 @@ COPY src /src/app/src
 RUN uv pip install /src/app
 
 # --- runtime: copy only the venv, no build tools -----------------------------
-FROM python:3.13.3-slim AS runtime
+FROM python:3.13.3-slim@sha256:5cc3361b5df0f3af709d5bb6c387361d9b2262ea4155dae6c701a2f66eb73b67 AS runtime
 
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
