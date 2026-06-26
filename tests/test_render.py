@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 from skillspector_quality.quality.models import CategoryScore, QualityReport
 from skillspector_quality.quality.render import (
-    _score_color,
     _quality_status,
+    _score_color,
     quality_json_dict,
     quality_markdown_section,
     quality_sarif_properties,
@@ -28,6 +28,7 @@ def _report(score: int, *, notes: str | None = None) -> QualityReport:
 
 
 # ── _score_color ─────────────────────────────────────────────────────────────
+
 
 def test_score_color_green() -> None:
     assert _score_color(80) == "green"
@@ -51,6 +52,7 @@ def test_score_color_boundary_40() -> None:
 
 # ── _quality_status ───────────────────────────────────────────────────────────
 
+
 def test_quality_status_excellent() -> None:
     sev, _ = _quality_status(90)
     assert sev == "EXCELLENT"
@@ -72,6 +74,7 @@ def test_quality_status_critical() -> None:
 
 
 # ── unified_terminal_text ─────────────────────────────────────────────────────
+
 
 def test_terminal_text_no_findings() -> None:
     report = _report(80)
@@ -136,6 +139,7 @@ def test_terminal_text_finding_no_remediation() -> None:
 
 # ── quality_markdown_section ──────────────────────────────────────────────────
 
+
 def test_markdown_section_basic() -> None:
     report = _report(80)
     md = quality_markdown_section(report)
@@ -157,6 +161,7 @@ def test_markdown_section_no_notes() -> None:
 
 
 # ── quality_json_dict / quality_sarif_properties ──────────────────────────────
+
 
 def test_json_dict_has_caveat() -> None:
     report = _report(70)
