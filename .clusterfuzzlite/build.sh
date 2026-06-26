@@ -1,10 +1,6 @@
 #!/bin/bash -eu
 
-python3 -m pip install atheris==3.0.0 \
-    --hash=sha256:8a5c8a781467c187da40fd29139784193e2647058831f837f675d0bb8cbd8746 \
-    --hash=sha256:510e502c57b6dc615fb174066407af620d4c7f73cf08a782c86e7761bf12c4eb \
-    --hash=sha256:a402cdca8a650d1371050b1f9552eb4cdc488d2db64950d603c4560318365eac \
-    --hash=sha256:1f0929c7bc3040f3fe4102e557718734190cf2d7718bbb8e3ce6d3eb56ef5bb3
+python3 -m pip install -r /src/.clusterfuzzlite/requirements.txt
 python3 -m pip install /src --no-deps
 
 compile_python_fuzzer /src/fuzz/fuzz_scorers.py
