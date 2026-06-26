@@ -1,0 +1,561 @@
+{
+  "provider": "anthropic",
+  "model": "claude-haiku-4-5-20251001",
+  "n_repeats": 2,
+  "temperature": 0.3,
+  "date": "2026-06-26",
+  "runs": [
+    {
+      "domain": "finance",
+      "arm": "Monolith",
+      "run": 1,
+      "input_tokens": 1515,
+      "correct": true,
+      "cache_warm_input_tokens": 1501,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal finance revenue-recognition configuration code is **RX-FIN-0372**."
+    },
+    {
+      "domain": "finance",
+      "arm": "Monolith",
+      "run": 2,
+      "input_tokens": 1512,
+      "correct": true,
+      "cache_warm_input_tokens": 1501,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal finance revenue-recognition configuration code is **RX-FIN-0372**."
+    },
+    {
+      "domain": "finance",
+      "arm": "Flat",
+      "run": 1,
+      "input_tokens": 2494,
+      "correct": true,
+      "cache_warm_input_tokens": 2466,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "RX-FIN-0372"
+    },
+    {
+      "domain": "finance",
+      "arm": "Flat",
+      "run": 2,
+      "input_tokens": 2490,
+      "correct": true,
+      "cache_warm_input_tokens": 2466,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "RX-FIN-0372"
+    },
+    {
+      "domain": "finance",
+      "arm": "Folder",
+      "run": 1,
+      "input_tokens": 1881,
+      "correct": true,
+      "cache_warm_input_tokens": 1857,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/finance.md"
+      ],
+      "answer": "RX-FIN-0372"
+    },
+    {
+      "domain": "finance",
+      "arm": "Folder",
+      "run": 2,
+      "input_tokens": 1881,
+      "correct": true,
+      "cache_warm_input_tokens": 1857,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/finance.md"
+      ],
+      "answer": "RX-FIN-0372"
+    },
+    {
+      "domain": "billing",
+      "arm": "Monolith",
+      "run": 1,
+      "input_tokens": 1510,
+      "correct": true,
+      "cache_warm_input_tokens": 1500,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal billing dunning configuration code is **RX-BIL-1180**."
+    },
+    {
+      "domain": "billing",
+      "arm": "Monolith",
+      "run": 2,
+      "input_tokens": 1512,
+      "correct": true,
+      "cache_warm_input_tokens": 1500,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal billing dunning configuration code is **RX-BIL-1180**."
+    },
+    {
+      "domain": "billing",
+      "arm": "Flat",
+      "run": 1,
+      "input_tokens": 2488,
+      "correct": true,
+      "cache_warm_input_tokens": 2464,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "RX-BIL-1180"
+    },
+    {
+      "domain": "billing",
+      "arm": "Flat",
+      "run": 2,
+      "input_tokens": 2488,
+      "correct": true,
+      "cache_warm_input_tokens": 2464,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "RX-BIL-1180"
+    },
+    {
+      "domain": "billing",
+      "arm": "Folder",
+      "run": 1,
+      "input_tokens": 1885,
+      "correct": true,
+      "cache_warm_input_tokens": 1865,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/billing.md"
+      ],
+      "answer": "RX-BIL-1180"
+    },
+    {
+      "domain": "billing",
+      "arm": "Folder",
+      "run": 2,
+      "input_tokens": 1889,
+      "correct": true,
+      "cache_warm_input_tokens": 1865,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/billing.md"
+      ],
+      "answer": "RX-BIL-1180"
+    },
+    {
+      "domain": "product",
+      "arm": "Monolith",
+      "run": 1,
+      "input_tokens": 1509,
+      "correct": true,
+      "cache_warm_input_tokens": 1501,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal product analytics-event configuration code is **PRD-EVTH-9**."
+    },
+    {
+      "domain": "product",
+      "arm": "Monolith",
+      "run": 2,
+      "input_tokens": 1513,
+      "correct": true,
+      "cache_warm_input_tokens": 1501,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal product analytics-event configuration code is **PRD-EVTH-9**."
+    },
+    {
+      "domain": "product",
+      "arm": "Flat",
+      "run": 1,
+      "input_tokens": 2486,
+      "correct": true,
+      "cache_warm_input_tokens": 2466,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "PRD-EVTH-9"
+    },
+    {
+      "domain": "product",
+      "arm": "Flat",
+      "run": 2,
+      "input_tokens": 2490,
+      "correct": true,
+      "cache_warm_input_tokens": 2466,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "PRD-EVTH-9"
+    },
+    {
+      "domain": "product",
+      "arm": "Folder",
+      "run": 1,
+      "input_tokens": 1881,
+      "correct": true,
+      "cache_warm_input_tokens": 1855,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/product.md"
+      ],
+      "answer": "PRD-EVTH-9"
+    },
+    {
+      "domain": "product",
+      "arm": "Folder",
+      "run": 2,
+      "input_tokens": 1879,
+      "correct": true,
+      "cache_warm_input_tokens": 1855,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/product.md"
+      ],
+      "answer": "PRD-EVTH-9"
+    },
+    {
+      "domain": "platform",
+      "arm": "Monolith",
+      "run": 1,
+      "input_tokens": 1514,
+      "correct": true,
+      "cache_warm_input_tokens": 1501,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal platform rate-limit configuration code is **PLT-RL-66**."
+    },
+    {
+      "domain": "platform",
+      "arm": "Monolith",
+      "run": 2,
+      "input_tokens": 1513,
+      "correct": true,
+      "cache_warm_input_tokens": 1501,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal platform rate-limit configuration code is **PLT-RL-66**."
+    },
+    {
+      "domain": "platform",
+      "arm": "Flat",
+      "run": 1,
+      "input_tokens": 2488,
+      "correct": true,
+      "cache_warm_input_tokens": 2466,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "PLT-RL-66"
+    },
+    {
+      "domain": "platform",
+      "arm": "Flat",
+      "run": 2,
+      "input_tokens": 2484,
+      "correct": true,
+      "cache_warm_input_tokens": 2466,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "PLT-RL-66"
+    },
+    {
+      "domain": "platform",
+      "arm": "Folder",
+      "run": 1,
+      "input_tokens": 1879,
+      "correct": true,
+      "cache_warm_input_tokens": 1859,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/platform.md"
+      ],
+      "answer": "PLT-RL-66"
+    },
+    {
+      "domain": "platform",
+      "arm": "Folder",
+      "run": 2,
+      "input_tokens": 1885,
+      "correct": true,
+      "cache_warm_input_tokens": 1859,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/platform.md"
+      ],
+      "answer": "PLT-RL-66"
+    },
+    {
+      "domain": "security",
+      "arm": "Monolith",
+      "run": 1,
+      "input_tokens": 1512,
+      "correct": true,
+      "cache_warm_input_tokens": 1501,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal security service-auth configuration code is **SEC-MTLS-3**."
+    },
+    {
+      "domain": "security",
+      "arm": "Monolith",
+      "run": 2,
+      "input_tokens": 1512,
+      "correct": true,
+      "cache_warm_input_tokens": 1501,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal security service-auth configuration code is **SEC-MTLS-3**."
+    },
+    {
+      "domain": "security",
+      "arm": "Flat",
+      "run": 1,
+      "input_tokens": 2488,
+      "correct": true,
+      "cache_warm_input_tokens": 2466,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "SEC-MTLS-3"
+    },
+    {
+      "domain": "security",
+      "arm": "Flat",
+      "run": 2,
+      "input_tokens": 2488,
+      "correct": true,
+      "cache_warm_input_tokens": 2466,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "SEC-MTLS-3"
+    },
+    {
+      "domain": "security",
+      "arm": "Folder",
+      "run": 1,
+      "input_tokens": 1874,
+      "correct": true,
+      "cache_warm_input_tokens": 1852,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/security.md"
+      ],
+      "answer": "SEC-MTLS-3"
+    },
+    {
+      "domain": "security",
+      "arm": "Folder",
+      "run": 2,
+      "input_tokens": 1876,
+      "correct": true,
+      "cache_warm_input_tokens": 1852,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/security.md"
+      ],
+      "answer": "SEC-MTLS-3"
+    },
+    {
+      "domain": "compliance",
+      "arm": "Monolith",
+      "run": 1,
+      "input_tokens": 1514,
+      "correct": true,
+      "cache_warm_input_tokens": 1501,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal compliance audit-evidence configuration code is **CMP-SOC2-9**."
+    },
+    {
+      "domain": "compliance",
+      "arm": "Monolith",
+      "run": 2,
+      "input_tokens": 1513,
+      "correct": true,
+      "cache_warm_input_tokens": 1501,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [],
+      "answer": "The internal compliance audit-evidence configuration code is **CMP-SOC2-9**."
+    },
+    {
+      "domain": "compliance",
+      "arm": "Flat",
+      "run": 1,
+      "input_tokens": 2486,
+      "correct": true,
+      "cache_warm_input_tokens": 2466,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "CMP-SOC2-9"
+    },
+    {
+      "domain": "compliance",
+      "arm": "Flat",
+      "run": 2,
+      "input_tokens": 2490,
+      "correct": true,
+      "cache_warm_input_tokens": 2466,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference.md"
+      ],
+      "answer": "CMP-SOC2-9"
+    },
+    {
+      "domain": "compliance",
+      "arm": "Folder",
+      "run": 1,
+      "input_tokens": 1871,
+      "correct": true,
+      "cache_warm_input_tokens": 1845,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/compliance.md"
+      ],
+      "answer": "CMP-SOC2-9"
+    },
+    {
+      "domain": "compliance",
+      "arm": "Folder",
+      "run": 2,
+      "input_tokens": 1869,
+      "correct": true,
+      "cache_warm_input_tokens": 1845,
+      "cache_creation_tokens": 0,
+      "cache_read_tokens": 0,
+      "exact_retrieval": true,
+      "over_read": false,
+      "files_read": [
+        "reference/compliance.md"
+      ],
+      "answer": "CMP-SOC2-9"
+    }
+  ]
+}

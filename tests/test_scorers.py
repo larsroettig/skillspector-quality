@@ -222,12 +222,83 @@ def test_metadata_optional_fields_not_penalized() -> None:
         "---\nname: my-skill\ndescription: Processes invoices and extracts totals.\n---\n# T\n"
     )
     ((earned, mx, _),) = dim_metadata(minimal, 8)
-    assert earned >= mx // 2  # optional absent fields → neutral (0.5), not zero
+    assert earned >= mx // 2  # when_to_use absent → neutral (0.5); author/version unscored
+
+
+def test_metadata_author_version_zero_score_effect() -> None:
+    # ADR-0001: author/version are advisory only — their presence/absence must not
+    # change the score. when_to_use stays scored, so hold it constant across both docs.
+    when = "Use when parsing invoices. Do not use for general text."
+    without = _doc(f"---\nname: my-skill\ndescription: d\nwhen_to_use: {when}\n---\n# T\n")
+    with_meta = _doc(
+        f"---\nname: my-skill\ndescription: d\nwhen_to_use: {when}\n"
+        "metadata:\n  author: A\n  version: 1.0\n---\n# T\n"
+    )
+    ((earned_without, _, _),) = dim_metadata(without, 8)
+    ((earned_with, _, label_with),) = dim_metadata(with_meta, 8)
+    assert earned_without == earned_with  # zero score effect
+    # ...but the advice still nudges the author when they're absent.
+    ((_, _, label_without),) = dim_metadata(without, 8)
+    assert "author" in label_without and "version" in label_without
+    assert "advisory" in label_without.lower()
 
 
 def test_progressive_disclosure_na_for_simple_skill() -> None:
     doc = _doc("---\nname: my-skill\ndescription: d\n---\n# Title\nShort body.\n")
-    assert dim_progressive_disclosure(doc, 7) == []  # N/A: concise, no supporting files needed
+    assert dim_progressive_disclosure(doc, 8) == []  # N/A: concise, no supporting files needed
+
+
+def test_progressive_disclosure_penalizes_bloated_monolith() -> None:
+    # ADR-0002: a >500-line SKILL.md body with no supporting docs is poorly disclosed.
+    big_body = "---\nname: s\ndescription: d\n---\n# T\n" + ("Line of detail here.\n" * 600)
+    result = dim_progressive_disclosure(_doc(big_body), 8)
+    assert result != []
+    ((earned, mx, label),) = result
+    assert earned < mx // 2  # heavily penalized
+    assert "no supporting docs" in label
+
+
+def test_progressive_disclosure_rewards_linked_docs_any_name() -> None:
+    # A lean body that links an arbitrarily-named supporting doc one level deep scores well.
+    body = (
+        "---\nname: s\ndescription: d\n---\n# T\n"
+        + ("Detail line.\n" * 250)
+        + "\nSee [forms guide](FORMS.md).\n"
+    )
+    doc = _doc(body, **{"FORMS.md": "# Forms\nHow to fill forms.\n"})
+    ((earned, mx, label),) = dim_progressive_disclosure(doc, 8)
+    assert earned == mx  # disclosed at depth 1, no nesting
+    assert "one level deep" in label
+
+
+def test_progressive_disclosure_recognizes_reference_folder() -> None:
+    body = (
+        "---\nname: s\ndescription: d\n---\n# T\n"
+        + ("Detail line.\n" * 250)
+        + "\nFinance: [reference/finance.md](reference/finance.md)\n"
+    )
+    doc = _doc(body, **{"reference/finance.md": "# Finance\nARR and billing.\n"})
+    ((earned, mx, _),) = dim_progressive_disclosure(doc, 8)
+    assert earned == mx  # folder-organized docs count as disclosure
+
+
+def test_progressive_disclosure_penalizes_nesting() -> None:
+    # SKILL.md -> advanced.md -> details.md : details.md is depth 2 (nested).
+    body = (
+        "---\nname: s\ndescription: d\n---\n# T\n"
+        + ("Detail line.\n" * 250)
+        + "\nSee [advanced](advanced.md).\n"
+    )
+    doc = _doc(
+        body,
+        **{
+            "advanced.md": "# Advanced\nSee [details](details.md).\n",
+            "details.md": "# Details\nThe actual info.\n",
+        },
+    )
+    ((earned, mx, label),) = dim_progressive_disclosure(doc, 8)
+    assert earned < mx  # nesting penalty applied
+    assert "nested" in label and "details.md" in label
 
 
 def test_example_quality_paired_vs_none() -> None:
