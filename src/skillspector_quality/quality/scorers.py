@@ -25,7 +25,7 @@ import functools
 import math
 import re
 import zlib
-from collections import Counter
+from collections import Counter, deque
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -497,6 +497,29 @@ def _link_graph(doc: SkillDoc) -> tuple[dict[str, set[str]], set[str]]:
     return adj, keys
 
 
+def _bfs_depths(adj: dict[str, set[str]], root: str) -> dict[str, int]:
+    """Shortest-path depth of each reachable node from ``root`` (root = 0).
+
+    Unreachable nodes are omitted. Used by Progressive Disclosure to tell a doc linked
+    directly from SKILL.md (depth 1) from one nested behind another doc (depth >= 2).
+    """
+    depths: dict[str, int] = {root: 0}
+    queue: deque[str] = deque([root])
+    while queue:
+        node = queue.popleft()
+        for nxt in adj.get(node, ()):
+            if nxt not in depths:
+                depths[nxt] = depths[node] + 1
+                queue.append(nxt)
+    return depths
+
+
+def _has_toc(content: str) -> bool:
+    """True if a markdown doc opens with a 'Contents'/'Table of Contents' heading."""
+    head = "\n".join(content.splitlines()[:40])
+    return bool(re.search(r"(?im)^#{1,4}\s+(table of\s+)?contents\b", head))
+
+
 def _reachable_from(adj: dict[str, set[str]], root: str) -> set[str]:
     seen: set[str] = set()
     stack = [root]
@@ -629,40 +652,47 @@ def dim_metadata(doc: SkillDoc, w: int) -> list[tuple[int, int, str]]:
     meta: dict[str, Any] = _meta_raw if isinstance(_meta_raw, dict) else {}
     name = str(data.get("name") or "")
     # Only name and description are required by the official spec.
-    # when_to_use, author, version are optional: 0.5 (neutral) when absent.
+    # when_to_use is optional but SCORED (specificity is high-ROI per AGENTbench).
+    # author/version are advisory only (ADR-0001): surfaced as guidance, never scored,
+    # so their absence cannot lower the score.
     when_spec = _when_specificity(when) if when else 0.0
+    name_ok = bool(re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name))
     signals = [
-        1.0 if 0 < len(desc) <= 1024 else (0.5 if desc else 0.0),  # required
+        1.0 if 0 < len(desc) <= 1024 else (0.5 if desc else 0.0),  # required: description
         when_spec if when else 0.5,  # optional: neutral if absent, specificity-scored if set
-        1.0 if meta.get("author") else 0.5,  # optional: neutral if absent
-        1.0 if meta.get("version") else 0.5,  # optional: neutral if absent
-        1.0 if re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", name) else 0.0,  # required
+        1.0 if name_ok else 0.0,  # required: name
     ]
     s = sum(signals) / len(signals)
     missing_required = []
     if not desc:
         missing_required.append("description")
-    if not signals[4]:
+    if not name_ok:
         missing_required.append("name (kebab-case format required)")
-    optional_improvements = []
+    # Scored improvements move the number; advisory items (author/version) never do.
+    scored_improvements = []
     if not when:
-        optional_improvements.append("when_to_use")
+        scored_improvements.append("when_to_use")
     elif when_spec < 0.7:
-        optional_improvements.append(
+        scored_improvements.append(
             "when_to_use specificity — add trigger conditions and 'Do not use for X' exclusions"
         )
+    advisory = []
     if not meta.get("author"):
-        optional_improvements.append("author")
+        advisory.append("author")
     if not meta.get("version"):
-        optional_improvements.append("version")
+        advisory.append("version")
+
     if missing_required:
         label = f"Required fields missing: {', '.join(missing_required)}"
-        if optional_improvements:
-            label += f" — also consider: {', '.join(optional_improvements)}"
-    elif optional_improvements:
-        label = f"Required fields present; consider: {', '.join(optional_improvements)} (improves agent ROI)"
+        if scored_improvements:
+            label += f" — also consider: {', '.join(scored_improvements)}"
+    elif scored_improvements:
+        label = f"Required fields present; consider: {', '.join(scored_improvements)} (improves agent ROI)"
     else:
         label = "All fields complete"
+    if advisory:
+        # Advisory note (ADR-0001): nice-to-have provenance, no effect on score.
+        label += f" — advisory (no score impact): add {', '.join(advisory)} for provenance"
     return [(round(w * s), w, label)]
 
 
@@ -854,34 +884,75 @@ def dim_example_quality(doc: SkillDoc, w: int) -> list[tuple[int, int, str]]:
 
 
 def dim_progressive_disclosure(doc: SkillDoc, w: int) -> list[tuple[int, int, str]]:
+    """Score whether content is appropriately disclosed given its volume (ADR-0002).
+
+    Reframed from "are reference.md + examples.md present?" to "is a large SKILL.md body
+    pushed into linked supporting docs, one level deep?". Recognizes ANY supporting doc
+    (arbitrary filenames, ``reference/`` folders) — not a fixed pair of names.
+
+    * **Trigger** — body < 100 lines and no supporting docs => N/A (concise skill, nothing
+      to disclose). Body > 500 lines => full expectation; 100-500 ramps linearly.
+    * **Scored** — body-leanness vs. volume (a big body with no linked docs is penalized);
+      a flatness penalty for any doc reachable only at depth >= 2 ("keep references one
+      level deep").
+    * **Advisory (zero weight)** — a supporting doc longer than 100 lines without a TOC.
+    """
     body = doc.body
-    has_supporting = any(doc.file_cache.get(f) for f in ("reference.md", "examples.md"))
     body_lines = len(body.splitlines())
-    if not has_supporting and body_lines < 100:
+    supporting = {p: c for p, c in doc.markdown_docs.items() if c and c.strip()}
+    if not supporting and body_lines < 100:
         return []  # N/A: concise skill without supporting files — follows best practices
-    signals: list[float] = []
-    linked_files: list[str] = []
-    problem_files: list[str] = []
-    body_targets = set(_relative_targets(body))
-    for fname in ("reference.md", "examples.md"):
-        content = doc.file_cache.get(fname)
-        present = content is not None and len(content.strip()) > 0
-        linked = fname in body_targets
-        val = 1.0 if (present and linked) else (0.5 if present else 0.0)
-        signals.append(val)
-        if present and linked:
-            linked_files.append(fname)
-        elif present:
-            problem_files.append(f"{fname} (not linked from SKILL.md)")
-        else:
-            problem_files.append(f"{fname} (absent)")
+
+    # How strongly does this body owe disclosure? 0 at <=100 lines, 1.0 at >=500.
+    expectation = clamp01((body_lines - 100) / (500 - 100))
+
+    adj, _nodes = _link_graph(doc)
+    depths = _bfs_depths(adj, doc.skill_md_key)
+    depth1 = [p for p in supporting if depths.get(p) == 1]
+    nested = [p for p in supporting if depths.get(p, -1) >= 2]
+    orphans = [p for p in supporting if p not in depths]
+
+    # Signal 1 — leanness: a body that owes disclosure should have depth-1 docs.
+    lean = 1.0 if depth1 else (1.0 - expectation)
+    signals: list[float] = [lean]
+
+    # Signal 2 — link quality: of the docs that exist, what fraction sit one level deep?
+    # Penalizes both nesting (depth >= 2) and orphans (unreachable from SKILL.md).
+    if supporting:
+        signals.append(len(depth1) / len(supporting))
+
     s = sum(signals) / len(signals)
-    if not problem_files:
-        label = "Full doc structure: examples.md and reference.md are linked"
-    elif not linked_files:
-        label = "No supporting docs — consider adding examples.md and reference.md for deeper documentation"
-    else:
-        label = f"Partial docs: {', '.join(linked_files)} linked; {', '.join(problem_files)}"
+
+    # Advisory (no score impact): long docs that lack a table of contents.
+    no_toc = sorted(p for p, c in supporting.items() if len(c.splitlines()) > 100 and not _has_toc(c))
+
+    parts: list[str] = []
+    if not supporting:
+        parts.append(
+            f"SKILL.md is {body_lines} lines with no supporting docs — "
+            "move detail into linked reference files"
+        )
+    elif depth1 and not nested and not orphans:
+        parts.append(f"{len(depth1)} supporting doc(s) linked one level deep from SKILL.md")
+    elif depth1:
+        parts.append(f"{len(depth1)} doc(s) linked directly")
+    elif not depth1:
+        parts.append("supporting docs exist but none are linked one level deep from SKILL.md")
+    if nested:
+        parts.append(
+            f"{len(nested)} doc(s) nested >=2 levels deep ({', '.join(sorted(nested))}) — "
+            "link them directly from SKILL.md"
+        )
+    if orphans:
+        parts.append(
+            f"{len(orphans)} doc(s) not linked from SKILL.md ({', '.join(sorted(orphans))}) — add links"
+        )
+    if no_toc:
+        parts.append(
+            f"advisory (no score impact): add a table of contents to {', '.join(no_toc)} "
+            "(>100 lines) so partial reads see full scope"
+        )
+    label = "; ".join(parts) if parts else "Progressive disclosure looks healthy"
     return [(round(w * s), w, label)]
 
 
@@ -1062,13 +1133,13 @@ def _bind(fn: ScorerFn, w: int) -> BoundScorerFn:
 DIMENSIONS: list[tuple[str, int, ScorerFn]] = [
     ("Metadata & Discovery", 8, dim_metadata),
     ("Information Density", 15, dim_information_density),  # raised: redundancy = wasted tokens
-    ("Lexical Diversity", 9, dim_lexical_diversity),
+    ("Lexical Diversity", 6, dim_lexical_diversity),  # lowered: ceded 3pts to Progressive Disclosure
     ("Readability", 10, dim_readability),
     ("Topic Coverage", 15, dim_topic_coverage),
     ("Structural Coherence", 13, dim_structural_coherence),
     ("Code Maintainability", 15, dim_code_maintainability),
     ("Example Quality", 10, dim_example_quality),
-    ("Progressive Disclosure", 5, dim_progressive_disclosure),  # lowered: more files ≠ better ROI
+    ("Progressive Disclosure", 8, dim_progressive_disclosure),  # raised: now penalizes bloated body + nesting
     ("Behavioral Configuration", 10, dim_behavioral_config),
 ]
 

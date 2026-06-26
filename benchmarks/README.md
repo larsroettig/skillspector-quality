@@ -150,14 +150,85 @@ After all runs, a comparison table is printed and two result files are saved to
 When `--models` or `--anthropic-all` or `--ollama-all` is used, a cross-model
 comparison table is printed after all models complete.
 
+## Structure benchmark (progressive disclosure)
+
+`structure_bench.py` is a **separate** experiment (ADR-0003) studying how selectively an agent
+retrieves from a skill, and what that costs. The extraction benchmark above sends a whole
+SKILL.md inline and measures *output* tokens — it cannot study disclosure, which is about an
+agent choosing *which files to load*.
+
+It uses **real skill folders on disk** under `benchmarks/skills/`, the same skill laid out three
+ways, across **6 domains arranged as 3 near-duplicate distractor pairs** (finance/billing,
+product/platform, security/compliance) so selective retrieval can genuinely go wrong:
+
+| Arm | Folder | Layout |
+|-----|--------|--------|
+| **Monolith** | `skills/monolith/` | everything in SKILL.md, no files — answer already in the always-loaded prompt |
+| **Flat** | `skills/flat/` | lean SKILL.md + one `reference.md` holding all domains |
+| **Folder** | `skills/folder/` | lean SKILL.md + `reference/<domain>.md` split by domain |
+
+Arms are loaded from disk with the same `rglob` pattern the scorer fixtures use; the `read_file`
+tool serves files by their real relative paths (`reference/finance.md`), **on demand** — nothing
+enters the prompt until the agent calls `read_file`.
+
+### What it does and does not show
+
+The cache-cold token ordering (Monolith ≥ Flat ≥ Folder) is partly **mechanical** — it follows
+from file sizes we chose — so this is a *demonstration of cost mechanics*, **not** proof that
+disclosure "wins". The empirical signals are the agent's **retrieval behaviour** and **cache-aware
+cost**:
+
+- **correctness** — planted-code substring match; a **floor gate only** (expect ~100%), kept to
+  discard broken runs. Not the headline.
+- **exact-retrieval** — read precisely the relevant file and nothing else (Monolith: read nothing).
+- **over-read** — read a distractor/irrelevant file.
+- **cost** — reported **cache-cold** (worst case; a per-call nonce in the prompt prefix defeats
+  caching) *and* **cache-warm** (uncached tokens with provider prompt caching engaged).
+
+Tokens are reported as **median [IQR]**, rates as **% [95% Wilson CI]** — so dispersion is
+visible, not hidden behind a point estimate.
+
+**Caveat (the actual finding).** Under prompt caching a stable Monolith system prompt is largely
+cache-read, so the cold→warm columns show the Monolith penalty mostly closing. Disclosure's
+token win therefore holds mainly for **cache-cold or frequently-changing** skills.
+
+A startup integrity check asserts every planted code is present in each arm (catching drift
+between the folders and the Python answer key). Requires a tool-capable provider (Anthropic or
+OpenAI tool calling).
+
+```bash
+# Show the on-disk arms + planted facts and run the integrity check, no LLM calls
+python benchmarks/structure_bench.py --list
+
+# Anthropic — cold + warm passes (default)
+export SKILLSPECTOR_PROVIDER=anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+python benchmarks/structure_bench.py                  # N=4, cold + warm (72 calls)
+python benchmarks/structure_bench.py --cache-cold-only        # cold only (36 calls)
+
+# OpenAI
+export SKILLSPECTOR_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+python benchmarks/structure_bench.py
+```
+
+**Cost:** 16 domains × 3 arms × N × 2 cache modes. At N=10 that's ~960 calls — develop with
+`-n 2 --cache-cold-only`, then do a full run. Results save to
+`benchmarks/results/YYYY-MM-DD-structure-{provider}-{model}.{md,json}`.
+
 ## Files
 
 ```
 benchmarks/
-  scenarios.py     — 3-arm Scenario dataclass + 8 scenario instances
-  validators.py    — validate(output, required_keys, expected, enum_fields) → (bool, reason)
-                     includes JSON-from-prose extraction for LowQuality outputs
-  run_benchmark.py — runner: 3-arm × N-repeat × 8 scenarios, markdown + JSON output
-  README.md        — this file
-  results/         — result files (gitignored except .gitkeep)
+  scenarios.py        — 3-arm Scenario dataclass + 8 scenario instances
+  validators.py       — validate(output, required_keys, expected, enum_fields) → (bool, reason)
+                        includes JSON-from-prose extraction for LowQuality outputs
+  run_benchmark.py    — extraction runner: 3-arm × N-repeat × 8 scenarios, markdown + JSON
+  structure_bench.py  — structure runner: Monolith/Flat/Folder × planted-fact tool-use loop
+  skills/             — real skill folders (one per arm), loaded from disk by structure_bench
+    monolith/SKILL.md
+    flat/{SKILL.md,reference.md}
+    folder/{SKILL.md,reference/<domain>.md}
+  README.md           — this file
+  results/            — result files (gitignored except .gitkeep)
 ```
