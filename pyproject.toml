@@ -18,6 +18,8 @@ dependencies = [
     # (resolve_input, build_context, the analyzer registry), so the upstream
     # version is part of our contract. Bump deliberately after testing a sync.
     "skillspector==2.1.4",
+    "langchain-core>=0.3,<2",
+    "langgraph>=0.3,<2",
     "typer>=0.12,<2",
     "rich>=14.3.0",
     "pyyaml>=6.0.1",
@@ -61,6 +63,11 @@ markers = [
     "self: scores the tool's own SKILL.md documentation",
 ]
 addopts = "-m 'not integration' --cov=skillspector_quality --cov-report=term-missing --cov-fail-under=70"
+
+[tool.uv.sources]
+# skillspector is not on PyPI; the stub satisfies the version pin for `uv sync`.
+# Local dev: install the real package with `pip install -e ../SkillRater` first.
+skillspector = { path = "ci-stubs/skillspector" }
 
 [tool.mypy]
 strict = true
