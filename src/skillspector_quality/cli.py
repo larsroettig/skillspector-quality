@@ -162,7 +162,7 @@ def scan(
                 temp_dir
                 and isinstance(temp_dir, str)
                 and os.path.isdir(temp_dir)
-                and os.path.abspath(temp_dir).startswith(tempfile.gettempdir())
+                and os.path.realpath(temp_dir).startswith(os.path.realpath(tempfile.gettempdir()))
             ):
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
