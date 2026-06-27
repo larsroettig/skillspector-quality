@@ -9,9 +9,12 @@ import sys
 
 import atheris
 
-with atheris.instrument_imports():
-    from skillspector_quality.quality import score_quality
-    from skillspector_quality.quality.scorers import _parse_frontmatter
+# Import before instrument_all() so PyInstaller's frozen loader resolves them
+# statically. instrument_imports() conflicts with PyInstaller's custom loader.
+from skillspector_quality.quality import score_quality
+from skillspector_quality.quality.scorers import _parse_frontmatter
+
+atheris.instrument_all()
 
 
 @atheris.instrument_func
@@ -19,13 +22,11 @@ def TestOneInput(data: bytes) -> None:  # noqa: N802 — atheris requires Pascal
     fdp = atheris.FuzzedDataProvider(data)
     text = fdp.ConsumeUnicodeNoSurrogates(len(data))
 
-    # Fuzz the YAML frontmatter parser
     try:
         _parse_frontmatter(text)
     except Exception:
         pass
 
-    # Fuzz the full scorer pipeline with a synthetic single-file doc
     try:
         score_quality({"SKILL.md": text})
     except Exception:
