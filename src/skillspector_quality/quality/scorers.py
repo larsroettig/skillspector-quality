@@ -1603,9 +1603,12 @@ def dim_behavioral_config(doc: SkillDoc, w: int, config: ScoringConfig | None = 
         ctx = data.get("context")
         valid_ctx = ctx in _VALID_CONTEXT
         exec_signals.append(1.0 if valid_ctx else 0.0)
-        exec_parts.append(
-            f"context: {ctx} {'✓' if valid_ctx else '— invalid (only "fork" is allowed)'}"
-        )
+        # Built outside the f-string on purpose: reusing double quotes inside a
+        # "-delimited f-string is PEP 701 syntax (3.12+). The fuzzing base image parses
+        # this file with Python 3.11, where it is a SyntaxError — and PyInstaller drops
+        # the unparseable module instead of failing, yielding a broken fuzz target.
+        ctx_note = "✓" if valid_ctx else '— invalid (only "fork" is allowed)'
+        exec_parts.append(f"context: {ctx} {ctx_note}")
         if valid_ctx and ctx == "fork" and "agent" not in data:
             exec_signals.append(0.0)
             exec_parts.append("agent: missing — recommended when context is fork")
@@ -1617,9 +1620,10 @@ def dim_behavioral_config(doc: SkillDoc, w: int, config: ScoringConfig | None = 
         val = data.get("effort")
         valid = val in _VALID_EFFORT
         exec_signals.append(1.0 if valid else 0.0)
-        exec_parts.append(
-            f"effort: {val} {'✓' if valid else f'— invalid (must be one of: {", ".join(sorted(_VALID_EFFORT))})'}"
-        )
+        # Same 3.11-parseability constraint as the context note above.
+        allowed = ", ".join(sorted(_VALID_EFFORT))
+        effort_note = "✓" if valid else f"— invalid (must be one of: {allowed})"
+        exec_parts.append(f"effort: {val} {effort_note}")
 
     if "shell" in data:
         val = str(data.get("shell") or "").lower()
