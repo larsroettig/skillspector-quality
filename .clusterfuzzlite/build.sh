@@ -9,4 +9,6 @@ python3 -m pip install --require-hashes -r /src/.clusterfuzzlite/requirements.tx
 # --ignore-requires-python: the base image ships an older interpreter than the package pins.
 python3 -m pip install /src --no-deps --no-build-isolation --ignore-requires-python
 
-compile_python_fuzzer /src/fuzz/fuzz_scorers.py
+compile_python_fuzzer \
+  /src/fuzz/fuzz_scorers.py \
+  --hidden-import=skillspector_quality.quality.scorers
