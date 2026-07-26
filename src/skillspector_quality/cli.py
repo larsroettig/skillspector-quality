@@ -20,6 +20,7 @@ import typer
 from langchain_core.runnables import RunnableConfig
 from rich.console import Console
 
+from skillspector_quality import __version__
 from skillspector_quality.config import ScoringConfig
 from skillspector_quality.graph import graph
 from skillspector_quality.quality.cost import CostReport
@@ -215,8 +216,24 @@ def scan(
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        console.print(f"skillspector-quality {__version__}")
+        raise typer.Exit()
+
+
 @app.callback()
-def main() -> None:
+def main(
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show the version and exit.",
+        ),
+    ] = False,
+) -> None:
     """skillspector-quality — quality rating on top of SkillSpector."""
 
 
