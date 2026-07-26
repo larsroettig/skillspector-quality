@@ -7,10 +7,21 @@ reproducible.
 
 from __future__ import annotations
 
-from skillspector_quality.quality.models import CategoryScore, QualityReport
-from skillspector_quality.quality.scorers import CATEGORY_SCORERS, SkillDoc
+import logging
 
-__all__ = ["score_quality", "QualityReport", "CategoryScore", "SkillDoc"]
+from skillspector_quality.config import ScoringConfig
+from skillspector_quality.quality.models import CategoryScore, QualityReport
+from skillspector_quality.quality.scorers import (
+    CATEGORY_SCORERS,
+    DIMENSIONS,
+    LINK_SUBCHECKS,
+    SkillDoc,
+    link_gate_violations,
+)
+
+logger = logging.getLogger(__name__)
+
+__all__ = ["score_quality", "QualityReport", "CategoryScore", "SkillDoc", "ScoringConfig"]
 
 # Dimensions whose primary signal comes from YAML frontmatter fields.
 # The frontmatter is stripped before the skill body reaches the LLM, so improvements
@@ -23,18 +34,31 @@ _FRONTMATTER_CATEGORY_NAMES: frozenset[str] = frozenset({
 })
 
 
-def score_quality(file_cache: dict[str, str]) -> QualityReport:
+def score_quality(
+    file_cache: dict[str, str], config: ScoringConfig | None = None
+) -> QualityReport:
     """Compute the quality report for a skill from its file_cache.
 
     Weighting is additive + normalized: each category contributes its raw ``earned``
     out of its raw ``max``; the final score is ``round(sum(earned)/sum(max) x 100)``.
     Adding categories therefore never breaks the 0-100 range.
+
+    ``config`` (see :class:`ScoringConfig`) may disable dimensions/sub-checks (omitted, so
+    weights renormalize) and mark them strict (raised bar + a gate violation when failing).
     """
+    config = config or ScoringConfig()
     doc = SkillDoc.from_file_cache(file_cache)
+
+    known_ids = {name for name, _, _ in DIMENSIONS} | set(LINK_SUBCHECKS)
+    unknown = config.unknown_ids(known_ids)
+    if unknown:
+        logger.warning("ignoring unknown scoring id(s): %s", ", ".join(sorted(unknown)))
 
     categories: list[CategoryScore] = []
     for name, scorer in CATEGORY_SCORERS:
-        items = scorer(doc)
+        if config.is_disabled(name):
+            continue  # disabled dimension: omit so its weight renormalizes away
+        items = scorer(doc, config)
         if not items:
             continue  # N/A dimension: omit so its weight renormalizes away
         earned = sum(e for e, _, _ in items)
@@ -47,4 +71,13 @@ def score_quality(file_cache: dict[str, str]) -> QualityReport:
     score = round(100 * total_earned / total_max) if total_max else 0
     score = max(0, min(100, score))
 
-    return QualityReport(score=score, categories=categories)
+    # Quality gate: strict dimensions that fall short of full, plus strict link sub-checks
+    # with offenders. The CLI exits non-zero when this list is non-empty.
+    gate_violations: list[str] = [
+        f"{c.name}: {c.earned}/{c.max} (strict)"
+        for c in categories
+        if config.is_strict(c.name) and c.earned < c.max
+    ]
+    gate_violations.extend(link_gate_violations(doc, config))
+
+    return QualityReport(score=score, categories=categories, gate_violations=gate_violations)

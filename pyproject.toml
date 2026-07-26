@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "skillspector-quality"
-version = "1.1.0"
+version = "2.0.0"
 description = "Deterministic authoring quality scorer for Claude Code skills. Rates SKILL.md bundles 0–100 across nine dimensions: information density, readability, topic coverage, structural coherence, code maintainability, and more"
 readme = "README.md"
 license = "MIT"
@@ -17,7 +17,7 @@ dependencies = [
     # Pinned to an exact version: this layer imports upstream internals
     # (resolve_input, build_context, the analyzer registry), so the upstream
     # version is part of our contract. Bump deliberately after testing a sync.
-    "skillspector==2.1.4",
+    "skillspector==2.4.4",
     "langchain-core>=0.3,<2",
     "langgraph>=0.3,<2",
     "typer>=0.12,<2",

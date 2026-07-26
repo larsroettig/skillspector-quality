@@ -20,9 +20,12 @@ import typer
 from langchain_core.runnables import RunnableConfig
 from rich.console import Console
 
+from skillspector_quality.config import ScoringConfig
 from skillspector_quality.graph import graph
+from skillspector_quality.quality.cost import CostReport
 from skillspector_quality.quality.models import QualityReport
 from skillspector_quality.quality.render import (
+    cost_markdown_section,
     quality_json_dict,
     quality_markdown_section,
     quality_sarif_properties,
@@ -46,15 +49,29 @@ class FormatChoice(StrEnum):
     sarif = "sarif"
 
 
-def _merge_output(result: dict[str, Any], fmt: FormatChoice, report: QualityReport) -> str:
-    """Combine the upstream security report_body with the quality block."""
+def _cost_from_state(result: dict[str, Any]) -> CostReport | None:
+    """Rebuild the cost report from graph state; None when the node did not produce one."""
+    raw = result.get("cost_report")
+    return CostReport.from_dict(raw) if isinstance(raw, dict) and raw else None
+
+
+def _merge_output(
+    result: dict[str, Any],
+    fmt: FormatChoice,
+    report: QualityReport,
+    cost: CostReport | None = None,
+) -> str:
+    """Combine the upstream security report_body with the quality and cost blocks."""
     report_body = result.get("report_body") or ""
 
     if fmt == FormatChoice.terminal:
-        return unified_terminal_text(result, report)
+        return unified_terminal_text(result, report, cost)
 
     if fmt == FormatChoice.markdown:
-        return report_body + "\n" + quality_markdown_section(report)
+        text = report_body + "\n" + quality_markdown_section(report)
+        if cost is not None:
+            text += "\n" + cost_markdown_section(cost)
+        return text
 
     if fmt == FormatChoice.json:
         try:
@@ -62,6 +79,8 @@ def _merge_output(result: dict[str, Any], fmt: FormatChoice, report: QualityRepo
         except json.JSONDecodeError:
             data = {}
         data["quality_assessment"] = quality_json_dict(report)
+        if cost is not None:
+            data["cost_assessment"] = cost.to_dict()
         return json.dumps(data, indent=2)
 
     # sarif
@@ -74,6 +93,8 @@ def _merge_output(result: dict[str, Any], fmt: FormatChoice, report: QualityRepo
     runs = sarif.get("runs") or [{}]
     props = runs[0].get("properties") or {}
     props["quality"] = quality_sarif_properties(report)
+    if cost is not None:
+        props["cost"] = cost.to_dict()
     runs[0]["properties"] = props
     sarif["runs"] = runs
     return json.dumps(sarif, indent=2)
@@ -117,6 +138,22 @@ def scan(
             max=100,
         ),
     ] = None,
+    disable: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--disable",
+            help="Disable a dimension or sub-check (repeatable / comma-separated), e.g. "
+            "'Lexical Diversity' or 'link.redundant'. Disabled checks renormalize away.",
+        ),
+    ] = None,
+    strict: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--strict",
+            help="Make a dimension/sub-check strict (repeatable / comma-separated): raises its "
+            "bar AND fails the run (exit 1) on violation, e.g. 'link.broken'.",
+        ),
+    ] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable debug logging.")] = False,
 ) -> None:
     """Scan a skill for security vulnerabilities AND rate its authoring quality."""
@@ -124,10 +161,14 @@ def scan(
         logging.basicConfig(level=logging.DEBUG, format="%(levelname)s %(name)s: %(message)s")
     result = None
     try:
+        scoring_config = ScoringConfig.load(
+            Path.cwd(), cli_disable=disable or [], cli_strict=strict or []
+        )
         state: dict[str, object] = {
             "input_path": input_path,
             "output_format": format.value,
             "use_llm": not no_llm,
+            "scoring_config": scoring_config,
         }
         if yara_rules_dir is not None:
             state["yara_rules_dir"] = str(yara_rules_dir.resolve())
@@ -136,10 +177,17 @@ def scan(
         result = graph.invoke(state, config=trace_config)
 
         report = QualityReport.from_dict(result.get("quality_report") or {"score": 0})
-        _write(_merge_output(result, format, report), output, format)
+        cost = _cost_from_state(result)
+        _write(_merge_output(result, format, report, cost), output, format)
 
         # Exit codes: preserve the upstream security risk gate first.
         if (result.get("risk_score") or 0) > 50:
+            raise typer.Exit(code=1)
+        # Strict-check gate: any strict dimension/sub-check that failed.
+        if report.gate_violations:
+            console.print("[red]Quality gate:[/red] strict checks failed:")
+            for v in report.gate_violations:
+                console.print(f"  [red]·[/red] {v}")
             raise typer.Exit(code=1)
         # Optional quality gate.
         if min_score is not None and report.score < min_score:

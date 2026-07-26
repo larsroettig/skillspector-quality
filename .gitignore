@@ -14,3 +14,5 @@ venv/
 .coverage
 htmlcov/
 .docker-build/
+.idea/
+.scout

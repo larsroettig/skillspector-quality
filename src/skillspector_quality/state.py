@@ -15,3 +15,11 @@ class QualityState(SkillspectorState, total=False):  # type: ignore[misc, call-a
     # Serialized QualityReport.to_dict(); a plain dict so it round-trips cleanly
     # through LangGraph state.
     quality_report: dict[str, object]
+
+    # ScoringConfig controlling disabled/strict dimensions and sub-checks. Passed
+    # in-process from the CLI to the quality_scorer node.
+    scoring_config: object
+
+    # Serialized CostReport.to_dict() — the token-cost axis, reported alongside quality
+    # rather than folded into it (ADR-0009).
+    cost_report: dict[str, object]

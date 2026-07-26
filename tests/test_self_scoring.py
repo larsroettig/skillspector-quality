@@ -1,4 +1,4 @@
-"""Self-scoring gate: the project's own SKILL.md must score GOOD tier (>=75)."""
+"""Self-scoring gate: the project's own SKILL.md must score EXCELLENT tier (>=82)."""
 
 from pathlib import Path
 
@@ -7,7 +7,11 @@ import pytest
 from skillspector_quality.quality import score_quality
 
 REPO_ROOT = Path(__file__).parent.parent
-MIN_SELF_SCORE = 75
+# Corpus p90 — the EXCELLENT cut line (ADR-0007). A tool that rates authoring quality should
+# sit in the top decile of the population it measures. The old gate of 75 was set against the
+# v1 distribution, where it fell between p50 and p75; under v2 it no longer asserts much.
+# Actual self-score at the time of calibration: 89.
+MIN_SELF_SCORE = 82
 
 
 @pytest.mark.self
