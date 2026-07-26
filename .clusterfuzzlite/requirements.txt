@@ -4,9 +4,15 @@
 # digests below; an unpinned or substituted package fails the build rather than silently
 # entering the fuzzing image (OpenSSF Scorecard: Pinned-Dependencies).
 #
-# atheris is the fuzzing engine. The remainder are the build backend for `pip install /src`,
-# which runs with `--no-build-isolation` so that pip uses these verified copies instead of
-# fetching an unpinned hatchling from PyPI at build time.
+# atheris is the fuzzing engine. hatchling and its dependencies are the build backend for
+# `pip install /src`, which runs with `--no-build-isolation` so that pip uses these verified
+# copies instead of fetching an unpinned hatchling from PyPI at build time.
+#
+# pyyaml is a *runtime* dependency of the fuzz target, not a build input. `pip install /src`
+# runs with `--no-deps`, so nothing else pulls it in, and PyInstaller can only bundle what is
+# importable at build time — without it the fuzz target builds cleanly and then dies at
+# import with "No module named 'yaml'". It is the only third-party runtime import the target
+# reaches; everything else on that path (config, models) is stdlib.
 #
 # Dependabot keeps these current (see .github/dependabot.yml, pip ecosystem).
 
@@ -78,3 +84,6 @@ tomli==2.4.1 ; python_version < "3.11" \
     --hash=sha256:fd0409a3653af6c147209d267a0e4243f0ae46b011aa978b1080359fddc9b6cf \
     --hash=sha256:ff18e6a727ee0ab0388507b89d1bc6a22b138d1e2fa56d1ad494586d61d2eae9 \
     --hash=sha256:ff2983983d34813c1aeb0fa89091e76c3a22889ee83ab27c5eeb45100560c049
+pyyaml==6.0.3 \
+    --hash=sha256:b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d \
+    --hash=sha256:d76623373421df22fb4cf8817020cbb7ef15c725b9d5e45f17e189bfc384190f
