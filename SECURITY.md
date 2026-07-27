@@ -2,9 +2,12 @@
 
 ## Supported Versions
 
+Security fixes land on the current major version. Older majors are not backported.
+
 | Version | Supported |
 |---------|-----------|
-| 1.x     | Yes       |
+| 2.x     | Yes       |
+| 1.x     | No        |
 
 ## Reporting a Vulnerability
 
