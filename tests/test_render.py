@@ -42,12 +42,16 @@ def test_score_color_red() -> None:
     assert _score_color(30) == "red"
 
 
-def test_score_color_boundary_70() -> None:
-    assert _score_color(70) == "green"
+def test_score_color_boundary_good() -> None:
+    """Green starts exactly at the GOOD cut line (corpus p50), not one point either side."""
+    assert _score_color(73) == "green"
+    assert _score_color(72) == "yellow"
 
 
-def test_score_color_boundary_40() -> None:
-    assert _score_color(40) == "yellow"
+def test_score_color_boundary_poor() -> None:
+    """Yellow bottoms out at the POOR cut line; below it is red."""
+    assert _score_color(45) == "yellow"
+    assert _score_color(44) == "red"
 
 
 # ── _quality_status ───────────────────────────────────────────────────────────
@@ -59,13 +63,27 @@ def test_quality_status_excellent() -> None:
 
 
 def test_quality_status_good() -> None:
-    sev, _ = _quality_status(72)
+    """73 is the corpus median — the boundary between FAIR and GOOD under v2 tiers."""
+    sev, _ = _quality_status(73)
     assert sev == "GOOD"
+    sev, _ = _quality_status(72)
+    assert sev == "FAIR"
 
 
 def test_quality_status_fair() -> None:
-    sev, _ = _quality_status(60)
+    """61 is the corpus p10 — above it a skill beats the bottom decile."""
+    sev, _ = _quality_status(61)
     assert sev == "FAIR"
+    sev, _ = _quality_status(60)
+    assert sev == "POOR"
+
+
+def test_quality_status_excellent_is_top_decile() -> None:
+    """82 is the corpus p90; 81 must not claim EXCELLENT."""
+    sev, _ = _quality_status(82)
+    assert sev == "EXCELLENT"
+    sev, _ = _quality_status(81)
+    assert sev == "GOOD"
 
 
 def test_quality_status_critical() -> None:

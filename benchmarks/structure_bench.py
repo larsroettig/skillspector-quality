@@ -567,20 +567,28 @@ def _markdown(results: list[StructRun], provider: str, model: str, n_repeats: in
         f"**Repeats:** {n_repeats} per cell  ",
         f"**Temperature:** {temperature}  ",
         "",
-        "Same skill, three layouts (real folders under `benchmarks/skills/`). This **demonstrates "
-        "the mechanics** of how layout maps to context cost and **measures the agent's retrieval "
-        "behaviour** — it does not by itself prove disclosure 'wins' (the token ordering is "
-        "partly mechanical). The empirical signals are retrieval precision and the cache-warm cost.",
+        (
+            "Same skill, three layouts (real folders under `benchmarks/skills/`). This "
+            "**demonstrates the mechanics** of how layout maps to context cost and **measures "
+            "the agent's retrieval behaviour** — it does not by itself prove disclosure 'wins' "
+            "(the token ordering is partly mechanical). The empirical signals are retrieval "
+            "precision and the cache-warm cost."
+        ),
         "",
-        "**Metrics.** Correctness (planted-code substring) is only a floor gate (expect ~100%). "
-        "The real signals: **exact-retrieval** = read precisely the relevant file (Monolith = read "
-        "nothing, answering from the always-loaded SKILL.md); **over-read** = read a distractor "
-        "file. Cost is reported **cache-cold** (worst case, per-call nonce) and **cache-warm** "
-        "(uncached tokens with provider prompt caching). Tokens: median [IQR]; rates: % [95% Wilson CI].",
+        (
+            "**Metrics.** Correctness (planted-code substring) is only a floor gate (expect "
+            "~100%). The real signals: **exact-retrieval** = read precisely the relevant file "
+            "(Monolith = read nothing, answering from the always-loaded SKILL.md); "
+            "**over-read** = read a distractor file. Cost is reported **cache-cold** (worst "
+            "case, per-call nonce) and **cache-warm** (uncached tokens with provider prompt "
+            "caching). Tokens: median [IQR]; rates: % [95% Wilson CI]."
+        ),
         "",
-        "**Caveat.** Under prompt caching a stable Monolith system prompt is largely cache-read, so "
-        "the cold-vs-warm gap shows disclosure's token win holds mainly for cache-cold or "
-        "frequently-changing skills.",
+        (
+            "**Caveat.** Under prompt caching a stable Monolith system prompt is largely "
+            "cache-read, so the cold-vs-warm gap shows disclosure's token win holds mainly for "
+            "cache-cold or frequently-changing skills."
+        ),
         "",
         "## Aggregate",
         "",

@@ -48,11 +48,14 @@ class QualityReport:
 
     score: int  # 0-100, normalized
     categories: list[CategoryScore] = field(default_factory=list)
+    # Strict checks (per ScoringConfig) that failed; non-empty → CLI exits non-zero.
+    gate_violations: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return {
             "score": self.score,
             "categories": [c.to_dict() for c in self.categories],
+            "gate_violations": self.gate_violations,
         }
 
     @classmethod
@@ -71,4 +74,8 @@ class QualityReport:
                     kind=c.get("kind", "body"),
                 )
             )
-        return cls(score=int(data["score"]), categories=cats)
+        return cls(
+            score=int(data["score"]),
+            categories=cats,
+            gate_violations=list(data.get("gate_violations") or []),
+        )

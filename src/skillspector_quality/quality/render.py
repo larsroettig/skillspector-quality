@@ -16,6 +16,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from skillspector_quality.quality.cost import (
+    ASSUMED_INVOCATION_RATE,
+    CostReport,
+    cost_status,
+)
 from skillspector_quality.quality.models import QualityReport
 
 _SKILLSPECTOR_VERSION = getattr(skillspector, "__version__", "")
@@ -42,11 +47,16 @@ _SEV_COLOR: dict[str, str] = {
 
 # Quality score thresholds → (severity label, recommendation).
 # Mirrors SkillSpector's risk_severity / risk_recommendation pattern.
+#
+# Anchored to the measured corpus (207 real skills: p10=61, p50=73, p90=82) so each tier
+# means a *population position* rather than an arbitrary number — see ADR-0007. The v1 cut
+# lines (85/70/55/40) predate calibration and are not comparable: under v2 scoring they
+# would label roughly half of all real skills as FAIR or worse.
 _QUALITY_LEVELS: list[tuple[int, str, str]] = [
-    (85, "EXCELLENT", "READY TO PUBLISH"),
-    (70, "GOOD", "REVIEW RECOMMENDED"),
-    (55, "FAIR", "IMPROVE BEFORE PUBLISHING"),
-    (40, "POOR", "SIGNIFICANT WORK NEEDED"),
+    (82, "EXCELLENT", "READY TO PUBLISH"),  # corpus p90 — top decile
+    (73, "GOOD", "REVIEW RECOMMENDED"),  # corpus p50 — above the median skill
+    (61, "FAIR", "IMPROVE BEFORE PUBLISHING"),  # corpus p10 — above the bottom decile
+    (45, "POOR", "SIGNIFICANT WORK NEEDED"),  # below anything in the corpus (min=48)
     (0, "CRITICAL", "NOT READY"),
 ]
 
@@ -60,9 +70,10 @@ def _quality_status(score: int) -> tuple[str, str]:
 
 
 def _score_color(score: int) -> str:
-    if score >= 70:
+    """Colour by tier boundary, so the colour and the label never disagree."""
+    if score >= 73:  # GOOD or better
         return "green"
-    if score >= 40:
+    if score >= 45:  # FAIR / POOR
         return "yellow"
     return "red"
 
@@ -72,7 +83,51 @@ def _score_color(score: int) -> str:
 # --------------------------------------------------------------------------- #
 
 
-def unified_terminal_text(result: dict[str, Any], report: QualityReport) -> str:
+def _cost_table(cost: CostReport) -> Table:
+    """Break the cost score into its three loading tiers.
+
+    The breakdown matters more than the number: raw token counts hide that a small
+    always-on description outweighs a large on-demand reference, because the weights differ
+    by two orders of magnitude.
+    """
+    table = Table(
+        show_header=True,
+        box=box.SIMPLE_HEAD,
+        title="Token cost",
+        caption=(
+            f"weighted total {cost.weighted_total:.0f} tokens "
+            f"({cost.raw_total} raw) · weights assume a skill fires in "
+            f"1 session of {round(1 / ASSUMED_INVOCATION_RATE)}"
+        ),
+    )
+    table.add_column("Tier", style="bold")
+    table.add_column("Raw", justify="right")
+    table.add_column("Weight", justify="right")
+    table.add_column("Effective", justify="right")
+    table.add_column("Paid")
+    for tier in cost.tiers:
+        table.add_row(
+            tier.name,
+            f"{tier.raw_tokens}",
+            f"×{tier.weight:g}",
+            f"{tier.weighted_tokens:.1f}",
+            tier.detail,
+        )
+    if cost.duplicate_tokens:
+        spans = ", ".join(f"{s.source} ↔ {s.target}" for s in cost.duplicate_spans[:2])
+        table.add_row(
+            "[yellow]recoverable[/yellow]",
+            f"[yellow]{cost.duplicate_tokens}[/yellow]",
+            "",
+            "",
+            f"[yellow]duplicated prose ({spans}) — paid twice[/yellow]",
+        )
+    return table
+
+
+def unified_terminal_text(
+    result: dict[str, Any], report: QualityReport, cost: CostReport | None = None
+) -> str:
     """Single cohesive terminal report combining security and quality sections.
 
     Builds from raw graph state (manifest, component_metadata, filtered_findings,
@@ -132,7 +187,19 @@ def unified_terminal_text(result: dict[str, Any], report: QualityReport) -> str:
         f"[{qual_color}]{quality_risk}/100[/{qual_color}]",
         f"[{qual_color}]{qual_severity}  {qual_rec}[/{qual_color}]",
     )
+    if cost is not None:
+        cost_tier, cost_rec = cost_status(cost.score)
+        cc = _score_color(cost.score)
+        # Shown as a risk-style number for column consistency: 0 = cheapest.
+        overview.add_row(
+            "Cost",
+            f"[{cc}]{100 - cost.score}/100[/{cc}]",
+            f"[{cc}]{cost_tier}  {cost_rec}[/{cc}]",
+        )
     console.print(overview)
+
+    if cost is not None:
+        console.print(_cost_table(cost))
 
     # ── Components ───────────────────────────────────────────────────────────
     if components:
@@ -193,6 +260,10 @@ def unified_terminal_text(result: dict[str, Any], report: QualityReport) -> str:
         "no effect on token spend  "
         "[B] prompt body — raises score AND reduces token spend[/dim]"
     )
+    if report.gate_violations:
+        console.print("\n[bold red]Strict gate failures[/bold red]")
+        for v in report.gate_violations:
+            console.print(f"  [red]x[/red] {v}")
     console.print(f"\n  [dim]{QUALITY_CAVEAT}[/dim]")
 
     return console.export_text()
@@ -201,6 +272,36 @@ def unified_terminal_text(result: dict[str, Any], report: QualityReport) -> str:
 # --------------------------------------------------------------------------- #
 # Non-terminal formats (unchanged structure)                                  #
 # --------------------------------------------------------------------------- #
+
+
+def cost_markdown_section(cost: CostReport) -> str:
+    """Markdown '## Token Cost' section — a separate axis from quality."""
+    tier, rec = cost_status(cost.score)
+    lines = [
+        "\n## Token Cost\n",
+        f"**Score:** {cost.score}/100 ({tier} — {rec})  ",
+        f"**Weighted total:** {cost.weighted_total:.0f} tokens ({cost.raw_total} raw)  ",
+        "",
+        "| Tier | Raw tokens | Weight | Effective | Paid |",
+        "|------|-----------:|-------:|----------:|------|",
+    ]
+    for t in cost.tiers:
+        lines.append(
+            f"| {t.name} | {t.raw_tokens} | ×{t.weight:g} | {t.weighted_tokens:.1f} | {t.detail} |"
+        )
+    lines.append("")
+    if cost.duplicate_tokens:
+        lines.append(
+            f"**Recoverable:** ~{cost.duplicate_tokens} tokens of duplicated prose, paid twice:"
+        )
+        for s in cost.duplicate_spans[:5]:
+            lines.append(f"- `{s.source}` ↔ `{s.target}` (~{s.shared_tokens} tokens)")
+        lines.append("")
+    lines.append(
+        "> Cost is scored independently of quality: across 207 real skills the two correlate "
+        "at only +0.14, so a high quality score does not imply a cheap skill."
+    )
+    return "\n".join(lines)
 
 
 def quality_markdown_section(report: QualityReport) -> str:
@@ -220,6 +321,11 @@ def quality_markdown_section(report: QualityReport) -> str:
         lines.append("### Suggestions\n")
         for name, note in notes:
             lines.append(f"- **{name}:** {note}")
+        lines.append("")
+    if report.gate_violations:
+        lines.append("### Strict gate failures\n")
+        for v in report.gate_violations:
+            lines.append(f"- {v}")
         lines.append("")
     lines.append(f"> {QUALITY_CAVEAT}")
     lines.append("")

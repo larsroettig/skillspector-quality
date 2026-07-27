@@ -56,7 +56,8 @@ determinism guarantee, or introduce hard dependencies on proprietary services.
 3. Add or update tests. The scorer must stay deterministic: same inputs must always produce
    the same score regardless of environment or LLM availability.
 4. Update the relevant section of `README.md` if you change a dimension weight or formula.
-5. Run `python -m pytest tests/` and confirm all tests pass.
+5. Run `python -m pytest tests/` and confirm all tests pass and coverage stays ≥ 96%
+   (see [Test and coverage requirements](#test-and-coverage-requirements)).
 6. Open a pull request. The PR description should include:
    - What changed and why
    - If a scoring formula changed: the research or rationale behind it
@@ -92,6 +93,28 @@ project's MIT license, per the [Developer Certificate of Origin v1.1](https://de
   (no I/O, no global state).
 - Default to **no comments** — well-named functions and variables are preferred. Add a comment
   only for non-obvious invariants or research-derived constants (include the citation).
+- **Keep `src/` parseable by Python 3.11.** The package targets 3.12+, but the ClusterFuzzLite
+  image parses this source with 3.11, and PyInstaller silently *drops* a module it cannot
+  parse — producing a fuzz target that builds cleanly and then dies at import. In practice
+  this rules out PEP 701 f-strings (reusing `"` inside a `"`-delimited f-string); hoist the
+  nested literal into a local instead. `.clusterfuzzlite/build.sh` runs `compileall` so a
+  violation fails the build with a file and line rather than a confusing import error.
+- Avoid implicit string concatenation inside a list literal — a reader cannot tell a
+  continuation from a forgotten comma. Wrap the concatenated group in explicit parentheses.
+
+---
+
+## Test and coverage requirements
+
+- `python -m pytest tests/` must pass.
+- **Coverage must stay at or above 96%.** The gate lives in `pyproject.toml`
+  (`--cov-fail-under=96`) and fails the build below it. Raise the gate when coverage rises;
+  do not lower it to make a change pass.
+- The scorer must stay deterministic: identical inputs produce identical scores regardless of
+  environment or LLM availability. Anything advisory (for example LLM commentary) must never
+  move a number.
+- User-visible changes get an entry under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md).
+  Releases publish that section verbatim, and tagging fails if the section is missing.
 
 ---
 
