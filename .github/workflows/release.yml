@@ -130,6 +130,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write # required to create the release and upload assets
+      id-token: write # required for Sigstore keyless signing (OIDC)
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -168,6 +169,26 @@ jobs:
           echo "--- release notes ---"
           cat release-notes.md
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # Keyless signing: cosign exchanges this job's OIDC token for a short-lived certificate
+      # binding the signature to the workflow identity (repo + ref + workflow), and records it
+      # in the public Rekor transparency log. Nothing secret is stored, so there is no signing
+      # key to leak or to lose along with a maintainer — see docs/assurance-case.md (C6).
+      - name: Sign artifacts with Sigstore
+        run: |
+          set -euxo pipefail
+          cat dist/*.sha256 > dist/SHA256SUMS
+          # Signing SHA256SUMS covers every tarball transitively: verify the signature on the
+          # manifest, then check each digest against it.
+          for f in dist/SHA256SUMS dist/*.tar.gz; do
+            cosign sign-blob --yes \
+              --bundle "${f}.sigstore.json" \
+              "$f"
+          done
+          ls -l dist/
+
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -177,9 +198,8 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euxo pipefail
-          cat dist/*.sha256 > dist/SHA256SUMS
           gh release create "$TAG" \
             --repo "$REPO" \
             --title "$TAG" \
             --notes-file release-notes.md \
-            dist/*.tar.gz dist/SHA256SUMS
+            dist/*.tar.gz dist/SHA256SUMS dist/*.sigstore.json

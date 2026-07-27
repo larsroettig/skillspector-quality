@@ -74,3 +74,56 @@ def test_changelog_documents_vulnerability_status() -> None:
 def test_released_versions_remain_documented(version: str) -> None:
     """Past releases keep their notes; the badge is assessed against release history."""
     assert _changelog_section(version), f"CHANGELOG.md lost the section for {version}"
+
+
+# --------------------------------------------------------------------------- #
+# Project-oversight documents
+#
+# These back OpenSSF Silver criteria (governance, roles_responsibilities,
+# access_continuity, documentation_roadmap, assurance_case). A published badge asserts
+# they exist; deleting or renaming one should fail here rather than quietly turn the
+# public claim into a false one.
+# --------------------------------------------------------------------------- #
+
+RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
+
+
+@pytest.mark.parametrize(
+    ("filename", "criterion"),
+    [
+        ("GOVERNANCE.md", "governance / roles_responsibilities / access_continuity"),
+        ("ROADMAP.md", "documentation_roadmap"),
+        ("RELEASING.md", "signed_releases (verification instructions)"),
+        ("docs/assurance-case.md", "assurance_case"),
+        ("CODE_OF_CONDUCT.md", "code_of_conduct"),
+        ("CONTRIBUTING.md", "contribution_requirements"),
+        ("SECURITY.md", "vulnerability_report_process"),
+    ],
+)
+def test_oversight_document_exists(filename: str, criterion: str) -> None:
+    path = REPO_ROOT / filename
+    assert path.is_file(), f"{filename} is missing — OpenSSF {criterion} depends on it"
+    assert path.read_text(encoding="utf-8").strip(), f"{filename} is empty"
+
+
+def test_governance_names_the_continuity_fallback() -> None:
+    """access_continuity is only real if the fallback is written down."""
+    text = (REPO_ROOT / "GOVERNANCE.md").read_text(encoding="utf-8")
+    assert "Continuity of access" in text
+    assert "bus factor" in text.lower(), "the bus-factor limitation must stay stated, not hidden"
+
+
+def test_assurance_case_states_accepted_risks() -> None:
+    """An assurance case that lists only mitigations is marketing, not an argument."""
+    text = (REPO_ROOT / "docs" / "assurance-case.md").read_text(encoding="utf-8")
+    assert "Accepted risks" in text
+    assert "Trust boundaries" in text
+
+
+def test_release_workflow_signs_artifacts() -> None:
+    """signed_releases: keyless signing must stay wired up, with the OIDC permission."""
+    text = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    assert "id-token: write" in text, "Sigstore keyless signing needs the OIDC token permission"
+    assert "cosign sign-blob" in text, "release artifacts are no longer signed"
+    assert "sigstore/cosign-installer@" in text
+    assert ".sigstore.json" in text, "signature bundles must be uploaded with the release"

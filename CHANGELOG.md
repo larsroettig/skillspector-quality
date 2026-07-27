@@ -10,6 +10,22 @@ release. The section for a version is the source of that release's notes.
 
 ## [Unreleased]
 
+### Added
+
+- `GOVERNANCE.md` — governance model, roles and responsibilities, and a continuity-of-access
+  plan, including a plainly-stated bus factor of 1.
+- `ROADMAP.md` — direction through 2027 H2, with an explicit "not planned" section.
+- `RELEASING.md` — how a release is cut and how anyone verifies it.
+- `docs/assurance-case.md` — trust boundaries, threat model, security claims with evidence, and
+  accepted risks.
+
+### Changed
+
+- Release artifacts are now signed with Sigstore keyless signing (cosign + GitHub OIDC) and
+  published with `.sigstore.json` bundles alongside `SHA256SUMS`. There is no private signing
+  key to lose or leak; verification checks that the artifact came from this repository's release
+  workflow.
+
 ## [2.0.0] — Unreleased
 
 Major bump: quality scores are not comparable with 1.x. Band edges were re-anchored to
