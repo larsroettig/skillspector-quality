@@ -116,14 +116,28 @@ def test_mtld_one_pass_hand_traced_factor_count() -> None:
     assert _mtld_one_pass(tokens, 0.5) == pytest.approx(6 / 3)
 
 
-def test_mtld_one_pass_with_partial_factor() -> None:
+def test_mtld_one_pass_zero_factors_falls_back_to_token_count() -> None:
     # threshold=0.72 (default): "a","b","c" never drops the running TTR to <=0.72
-    # (TTR stays 1.0 the whole way), so there are zero complete factors and one
-    # partial factor at the end: factors = 0 + (1 - ttr) / (1 - threshold).
+    # (TTR stays 1.0 the whole way), so there are zero complete factors and the
+    # trailing partial-factor contribution (1 - ttr) / (1 - threshold) is also 0
+    # since ttr=1.0. With factors==0, the implementation falls back to len(tokens).
     tokens = ["a", "b", "c"]
     ttr = 1.0  # 3 unique / 3 tokens
-    expected_factors = (1 - ttr) / (1 - 0.72)
-    expected = len(tokens) / expected_factors if expected_factors else float(len(tokens))
+    partial_factor = (1 - ttr) / (1 - 0.72)
+    assert partial_factor == 0.0
+    expected = float(len(tokens))
+    assert _mtld_one_pass(tokens, 0.72) == pytest.approx(expected)
+
+
+def test_mtld_one_pass_genuine_partial_factor() -> None:
+    # threshold=0.72: no complete factor is ever triggered (TTR never drops to <=0.72
+    # mid-stream), but the trailing TTR (3 types / 4 tokens = 0.75) yields a genuine
+    # non-zero partial factor: factors = (1 - 0.75) / (1 - 0.72).
+    tokens = ["a", "b", "c", "c"]
+    ttr = 3 / 4
+    partial_factor = (1 - ttr) / (1 - 0.72)
+    assert partial_factor != 0.0
+    expected = len(tokens) / partial_factor
     assert _mtld_one_pass(tokens, 0.72) == pytest.approx(expected)
 
 
@@ -454,6 +468,13 @@ def test_cosine_similarity_bounded_for_nonnegative_tfidf(
 @given(st.integers(min_value=0, max_value=100), st.integers(min_value=1, max_value=100))
 def test_final_score_formula_bounded(earned: int, cap: int) -> None:
     earned = min(earned, cap)
-    score = round(100 * earned / cap)
-    score = max(0, min(100, score))
-    assert 0 <= score <= 100
+
+    def scorer(doc, config):
+        return [(earned, cap, "item")]
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(quality_pkg, "CATEGORY_SCORERS", [("A", scorer)])
+        report = score_quality({"SKILL.md": "x"})
+
+    assert report.score == round(100 * earned / cap)
+    assert 0 <= report.score <= 100
