@@ -35,12 +35,19 @@ jobs:
       matrix:
         include:
           # PyInstaller cannot cross-compile, so each target needs its own native runner.
+          # darwin-x86_64 has no hosted runner (GitHub retired Intel macOS images); it builds
+          # on the same arm64 host as darwin-arm64, forced to the x86_64 slice via Rosetta 2
+          # (`arch -x86_64`) so pip resolves x86_64 wheels and PyInstaller freezes an Intel
+          # binary.
           - target: darwin-arm64
             runner: macos-14
+            arch_prefix: ""
           - target: darwin-x86_64
-            runner: macos-13
+            runner: macos-14
+            arch_prefix: "arch -x86_64"
           - target: linux-x86_64
             runner: ubuntu-latest
+            arch_prefix: ""
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -59,22 +66,30 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      # actions/setup-python ships a universal2 CPython on macOS, so this installs Rosetta
+      # once and every later `arch -x86_64 python ...` call in this job runs the same
+      # interpreter as its x86_64 slice — pip then resolves macosx_x86_64 wheels instead of
+      # arm64 ones.
+      - name: Install Rosetta 2
+        if: matrix.target == 'darwin-x86_64'
+        run: softwareupdate --install-rosetta --agree-to-license
+
       - name: Install dependencies
         run: |
           set -euxo pipefail
-          python -m pip install --upgrade pip
+          ${{ matrix.arch_prefix }} python -m pip install --upgrade pip
           # Order matters. Installing the real skillspector FIRST satisfies this package's
           # `skillspector==2.9.6` pin, so the next install does not try (and fail) to reach
           # PyPI for it. pip is used deliberately instead of uv: [tool.uv.sources] redirects
           # skillspector to the CI stub, which must never end up in a release binary.
-          python -m pip install ./.skillspector-src
-          python -m pip install ".[code]"
-          python -m pip install pyinstaller==6.21.0
+          ${{ matrix.arch_prefix }} python -m pip install ./.skillspector-src
+          ${{ matrix.arch_prefix }} python -m pip install ".[code]"
+          ${{ matrix.arch_prefix }} python -m pip install pyinstaller==6.21.0
 
       - name: Verify the real upstream is installed, not the stub
         run: |
           set -euxo pipefail
-          python - <<'PY'
+          ${{ matrix.arch_prefix }} python - <<'PY'
           import pathlib, skillspector
           version = getattr(skillspector, "__version__", "")
           assert version == "2.9.6", f"unexpected skillspector version: {version!r}"
@@ -89,7 +104,10 @@ jobs:
 
       - name: Build binary
         working-directory: packaging/pyinstaller
-        run: pyinstaller skillspector-quality.spec --clean --noconfirm
+        # `arch -x86_64 python -m PyInstaller` (rather than the `pyinstaller` entry-point
+        # script) spawns the interpreter directly, so the arch preference is guaranteed to
+        # apply rather than relying on shebang inheritance.
+        run: ${{ matrix.arch_prefix }} python -m PyInstaller skillspector-quality.spec --clean --noconfirm
 
       - name: Smoke-test binary
         run: |

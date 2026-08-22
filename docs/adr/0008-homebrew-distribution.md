@@ -30,7 +30,10 @@ formula downloads a tarball and installs a single file — no dependency resolut
 time, and no regeneration when a dependency bumps.
 
 - **Targets:** `darwin-arm64`, `darwin-x86_64`, `linux-x86_64`. PyInstaller cannot
-  cross-compile, so each gets a native runner.
+  cross-compile, so each needs a native interpreter. GitHub retired hosted Intel macOS
+  runners, so `darwin-x86_64` builds on the same `macos-14` (arm64) host as `darwin-arm64`,
+  forced onto its x86_64 slice via Rosetta 2 (`arch -x86_64 python -m PyInstaller ...`); pip
+  then resolves `macosx_x86_64` wheels and PyInstaller freezes an Intel binary.
 - **Upstream pin:** `NVIDIA/skillspector@fd25398d7aa99353d86237b9c260759351f0e644` — the newest
   commit where upstream `pyproject.toml` declares version `2.4.4`, currently upstream HEAD. A
   commit SHA is the only pin available in the absence of tags.
