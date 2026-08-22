@@ -4,9 +4,12 @@
 # digests below; an unpinned or substituted package fails the build rather than silently
 # entering the fuzzing image (OpenSSF Scorecard: Pinned-Dependencies).
 #
-# atheris is the fuzzing engine. hatchling and its dependencies are the build backend for
-# `pip install /src`, which runs with `--no-build-isolation` so that pip uses these verified
-# copies instead of fetching an unpinned hatchling from PyPI at build time.
+# atheris is the fuzzing engine. Pinned to 3.0.0 (not the newer 3.1.0) because the base-builder
+# image ships Python 3.11 and atheris only started publishing cp311 wheels again as of 3.0.0;
+# 3.1.0 only ships cp312+ wheels, which makes `pip install --require-hashes` fail to resolve.
+# hatchling and its dependencies are the build backend for `pip install /src`, which runs with
+# `--no-build-isolation` so that pip uses these verified copies instead of fetching an unpinned
+# hatchling from PyPI at build time.
 #
 # pyyaml is a *runtime* dependency of the fuzz target, not a build input. `pip install /src`
 # runs with `--no-deps`, so nothing else pulls it in, and PyInstaller can only bundle what is
@@ -16,10 +19,11 @@
 #
 # Dependabot keeps these current (see .github/dependabot.yml, pip ecosystem).
 
-atheris==3.1.0 \
-    --hash=sha256:315a0b5c819852b1ffe1ca72efc389c7724881f2c33e4aacb8c6bcec49bd5011 \
-    --hash=sha256:ec5e11f21a4c197fe91f7aea2b2de88e623c73a21fc07b105ac6329a1588457b \
-    --hash=sha256:f8a9f51ce8369026e8eb7b7174835e8c4c85a1a6db5d9add36c15100779d2a39
+atheris==3.0.0 \
+    --hash=sha256:1f0929c7bc3040f3fe4102e557718734190cf2d7718bbb8e3ce6d3eb56ef5bb3 \
+    --hash=sha256:510e502c57b6dc615fb174066407af620d4c7f73cf08a782c86e7761bf12c4eb \
+    --hash=sha256:8a5c8a781467c187da40fd29139784193e2647058831f837f675d0bb8cbd8746 \
+    --hash=sha256:a402cdca8a650d1371050b1f9552eb4cdc488d2db64950d603c4560318365eac
 hatchling==1.32.0 \
     --hash=sha256:0bdbde4a52b06c37e3eca395f85a762bf0ef06fe374fd8ae429dc6be10230f5f \
     --hash=sha256:0e17c9c3b9aa7c625acc8d0f5b622f107d5049af9ecf5ada4de1aada5be7cdbc
