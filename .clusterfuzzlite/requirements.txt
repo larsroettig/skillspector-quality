@@ -7,9 +7,11 @@
 # atheris is the fuzzing engine. Pinned to 3.0.0 (not the newer 3.1.0) because the base-builder
 # image ships Python 3.11 and atheris only started publishing cp311 wheels again as of 3.0.0;
 # 3.1.0 only ships cp312+ wheels, which makes `pip install --require-hashes` fail to resolve.
-# hatchling and its dependencies are the build backend for `pip install /src`, which runs with
+# hatchling and its dependencies (packaging, pathspec, pluggy, tomlkit, trove-classifiers, and
+# tomli on <3.11) are the build backend for `pip install /src`, which runs with
 # `--no-build-isolation` so that pip uses these verified copies instead of fetching an unpinned
-# hatchling from PyPI at build time.
+# hatchling from PyPI at build time. In `--require-hashes` mode every one of hatchling's
+# dependencies must be pinned here too, or pip refuses to resolve them.
 #
 # pyyaml is a *runtime* dependency of the fuzz target, not a build input. `pip install /src`
 # runs with `--no-deps`, so nothing else pulls it in, and PyInstaller can only bundle what is
@@ -36,6 +38,9 @@ pathspec==1.1.1 \
 pluggy==1.6.0 \
     --hash=sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3 \
     --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746
+tomlkit==0.15.1 \
+    --hash=sha256:177a05aece5a8ca5266fd3c448abb47b8d352f09d477d3ca8332db4d89b24304 \
+    --hash=sha256:e25bbf38843005246210a12982776f27f99cb9be67160e14434d0c0d21ee1e97
 trove-classifiers==2026.6.1.19 \
     --hash=sha256:ab4c4ec93cc4a4e7815fa759906e05e6bb3f2fbd92ea0f897288c6a43efd15b3 \
     --hash=sha256:c5132b4b61a829d11cfbd2d72e97f20a45ed6edb95e45c5efdeb5e00836b2745
