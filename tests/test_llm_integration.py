@@ -17,11 +17,11 @@ from __future__ import annotations
 import json
 import pathlib
 from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 import skillspector.llm_utils as llm_utils
+
 from skillspector_quality.nodes.quality_scorer import quality_scorer
 from skillspector_quality.quality.commentary import (
     _build_prompt,
@@ -240,7 +240,7 @@ class TestEndToPipelineFlow:
         monkeypatch.setattr(llm_utils, "is_llm_available", lambda: (True, ""))
         mock = _make_chat_mock(monkeypatch, '{"Readability": "tip", "Topic Coverage": "unexpected tip"}')
 
-        result = add_notes(weak_report)
+        add_notes(weak_report)
 
         # Verify the prompt did NOT ask the LLM about the full-marks category.
         args, _ = mock.call_args
@@ -790,7 +790,6 @@ class TestGraphInvokeIntegration:
 
     def test_graph_invoke_no_llm_deterministic(self):
         from skillspector_quality.graph import graph
-        from skillspector_quality.quality.models import QualityReport
 
         state = {"input_path": str(FIXTURE_GOOD), "output_format": "json", "use_llm": False}
         r1 = graph.invoke(dict(state))
@@ -823,7 +822,6 @@ class TestGraphInvokeIntegration:
     def test_graph_invoke_score_identical_with_and_without_llm(self, monkeypatch):
         """Notes must never change the numeric score — verified at the graph level."""
         from skillspector_quality.graph import graph
-        from skillspector_quality.quality.models import QualityReport
 
         monkeypatch.setattr(llm_utils, "is_llm_available", lambda: (True, ""))
         _make_chat_mock(monkeypatch, '{"Readability": "Shorten your sentences significantly."}')
