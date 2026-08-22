@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "skillspector"
-version = "2.4.4"
+version = "2.9.6"
 description = "CI stub for skillspector — satisfies the version pin without PyPI"
 requires-python = ">=3.12"
 dependencies = []
