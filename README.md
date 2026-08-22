@@ -1116,7 +1116,7 @@ git clone https://github.com/larsroettig/homebrew-tap && mkdir -p homebrew-tap/F
 Per release:
 
 ```bash
-git tag v2.0.0 && git push origin v2.0.0     # triggers .github/workflows/release.yml
+git tag -s v2.0.0 -m "v2.0.0" && git push origin v2.0.0  # triggers .github/workflows/release.yml
 gh run watch                                  # builds 3 platforms, publishes the release
 
 # once the release exists, regenerate the formula from its published checksums

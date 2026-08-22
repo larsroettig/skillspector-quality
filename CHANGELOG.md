@@ -26,7 +26,7 @@ release. The section for a version is the source of that release's notes.
   key to lose or leak; verification checks that the artifact came from this repository's release
   workflow.
 
-## [2.0.0] — Unreleased
+## [2.0.0] — 2026-08-22
 
 Major bump: quality scores are not comparable with 1.x. Band edges were re-anchored to
 measured corpus percentiles, so the same skill will generally score differently than it
@@ -116,6 +116,7 @@ reconstructed afterward from the repository history.
 
 - No publicly known run-time vulnerabilities were fixed in this release.
 
-[Unreleased]: https://github.com/larsroettig/skillspector-quality/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/larsroettig/skillspector-quality/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/larsroettig/skillspector-quality/compare/v1.1.0...v2.0.0
 [1.1.0]: https://github.com/larsroettig/skillspector-quality/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/larsroettig/skillspector-quality/releases/tag/v1.0.0
