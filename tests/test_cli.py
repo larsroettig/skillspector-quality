@@ -107,6 +107,66 @@ def test_scan_sarif_format() -> None:
     assert result.exit_code == 0, result.output
 
 
+def test_scan_sarif_invalid_report_body_falls_back(tmp_path: pathlib.Path) -> None:
+    """When there's no sarif_report and report_body isn't valid JSON, build a minimal run."""
+    from unittest.mock import patch
+
+    broken_state = {
+        "quality_report": {"score": 70, "categories": []},
+        "risk_score": 0,
+        "report_body": "NOT_JSON",
+    }
+    with patch("skillspector_quality.cli.graph") as mock_graph:
+        mock_graph.invoke.return_value = broken_state
+        result = RUNNER.invoke(app, ["scan", GOOD_FIXTURE, "--no-llm", "--format", "sarif"])
+    assert result.exit_code == 0, result.output
+    import json
+
+    sarif = json.loads(result.output)
+    assert sarif["runs"][0]["properties"]["quality"]["score"] == 70
+
+
+def test_scan_yara_rules_dir_option(tmp_path: pathlib.Path) -> None:
+    rules_dir = tmp_path / "rules"
+    rules_dir.mkdir()
+    result = RUNNER.invoke(
+        app, ["scan", GOOD_FIXTURE, "--no-llm", "--yara-rules-dir", str(rules_dir)]
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_scan_strict_gate_violations_exit_one_and_printed() -> None:
+    """Strict gate violations print each offender and force a non-zero exit."""
+    from unittest.mock import patch
+
+    state = {
+        "quality_report": {
+            "score": 80,
+            "categories": [],
+            "gate_violations": ["link.broken: 2 broken link(s)"],
+        },
+        "risk_score": 0,
+        "report_body": "{}",
+    }
+    with patch("skillspector_quality.cli.graph") as mock_graph:
+        mock_graph.invoke.return_value = state
+        result = RUNNER.invoke(app, ["scan", GOOD_FIXTURE, "--no-llm"])
+    assert result.exit_code == 1
+    assert "strict checks failed" in result.output
+    assert "link.broken: 2 broken link(s)" in result.output
+
+
+def test_scan_unexpected_exception_exits_two() -> None:
+    """Any unforeseen exception during the graph run is caught and mapped to exit code 2."""
+    from unittest.mock import patch
+
+    with patch("skillspector_quality.cli.graph") as mock_graph:
+        mock_graph.invoke.side_effect = RuntimeError("boom")
+        result = RUNNER.invoke(app, ["scan", GOOD_FIXTURE, "--no-llm"])
+    assert result.exit_code == 2
+    assert "boom" in result.output
+
+
 def test_scan_cleans_up_temp_dir() -> None:
     """temp_dir_for_cleanup inside tempfile.gettempdir() is removed after the scan."""
     import os

@@ -17,7 +17,7 @@ dependencies = [
     # Pinned to an exact version: this layer imports upstream internals
     # (resolve_input, build_context, the analyzer registry), so the upstream
     # version is part of our contract. Bump deliberately after testing a sync.
-    "skillspector==2.4.4",
+    "skillspector==2.9.6",
     "langchain-core>=0.3,<2",
     "langgraph>=0.3,<2",
     "typer>=0.12,<2",
@@ -35,6 +35,7 @@ code = [
 dev = [
     "pytest>=9.0.0",
     "pytest-cov>=4.0",
+    "hypothesis>=6.100",
     "ruff>=0.15.0",
     "mypy>=1.19.0",
     "pre-commit>=3.0",

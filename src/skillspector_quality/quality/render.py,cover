@@ -1,0 +1,347 @@
+> """Render the quality report for each output format.
+  
+> Kept separate from the upstream report node so SkillSpector's own formatters stay
+> untouched; the CLI stitches these in.
+> """
+  
+> from __future__ import annotations
+  
+> from datetime import UTC, datetime
+> from io import StringIO
+> from typing import Any
+  
+> import skillspector
+> from rich import box
+> from rich.console import Console
+> from rich.panel import Panel
+> from rich.table import Table
+  
+> from skillspector_quality.quality.cost import (
+>     ASSUMED_INVOCATION_RATE,
+>     CostReport,
+>     cost_status,
+> )
+> from skillspector_quality.quality.models import QualityReport
+  
+> _SKILLSPECTOR_VERSION = getattr(skillspector, "__version__", "")
+  
+  # Scope disclaimer that travels with every report. Guards against the "high score illusion":
+  # a structurally perfect skill can still be logically broken. Content-correctness cannot be
+  # measured deterministically, so the score never implies the skill actually works.
+> QUALITY_CAVEAT = (
+>     "Note: This score evaluates the structural quality and completeness of your instructions "
+>     "(syntax, constraints, formatting). It does not guarantee content correctness, factual "
+>     "accuracy, or prevent model hallucinations. Always functionally test your skill against "
+>     "real-world inputs."
+> )
+  
+> _SEV_COLOR: dict[str, str] = {
+>     "CRITICAL": "red",
+>     "HIGH": "red",
+>     "FAIR": "yellow",
+>     "GOOD": "green",
+>     "EXCELLENT": "green",
+>     "MEDIUM": "yellow",
+>     "LOW": "green",
+> }
+  
+  # Quality score thresholds → (severity label, recommendation).
+  # Mirrors SkillSpector's risk_severity / risk_recommendation pattern.
+  #
+  # Anchored to the measured corpus (207 real skills: p10=61, p50=73, p90=82) so each tier
+  # means a *population position* rather than an arbitrary number — see ADR-0007. The v1 cut
+  # lines (85/70/55/40) predate calibration and are not comparable: under v2 scoring they
+  # would label roughly half of all real skills as FAIR or worse.
+> _QUALITY_LEVELS: list[tuple[int, str, str]] = [
+>     (82, "EXCELLENT", "READY TO PUBLISH"),  # corpus p90 — top decile
+>     (73, "GOOD", "REVIEW RECOMMENDED"),  # corpus p50 — above the median skill
+>     (61, "FAIR", "IMPROVE BEFORE PUBLISHING"),  # corpus p10 — above the bottom decile
+>     (45, "POOR", "SIGNIFICANT WORK NEEDED"),  # below anything in the corpus (min=48)
+>     (0, "CRITICAL", "NOT READY"),
+> ]
+  
+  
+> def _quality_status(score: int) -> tuple[str, str]:
+>     """Return (severity, recommendation) for a 0-100 quality score."""
+>     for threshold, severity, recommendation in _QUALITY_LEVELS:
+>         if score >= threshold:
+>             return severity, recommendation
+>     return "CRITICAL", "NOT READY"
+  
+  
+> def _score_color(score: int) -> str:
+>     """Colour by tier boundary, so the colour and the label never disagree."""
+>     if score >= 73:  # GOOD or better
+>         return "green"
+>     if score >= 45:  # FAIR / POOR
+>         return "yellow"
+>     return "red"
+  
+  
+  # --------------------------------------------------------------------------- #
+  # Unified terminal renderer (security + quality in one report)                #
+  # --------------------------------------------------------------------------- #
+  
+  
+> def _cost_table(cost: CostReport) -> Table:
+>     """Break the cost score into its three loading tiers.
+  
+>     The breakdown matters more than the number: raw token counts hide that a small
+>     always-on description outweighs a large on-demand reference, because the weights differ
+>     by two orders of magnitude.
+>     """
+>     table = Table(
+>         show_header=True,
+>         box=box.SIMPLE_HEAD,
+>         title="Token cost",
+>         caption=(
+>             f"weighted total {cost.weighted_total:.0f} tokens "
+>             f"({cost.raw_total} raw) · weights assume a skill fires in "
+>             f"1 session of {round(1 / ASSUMED_INVOCATION_RATE)}"
+>         ),
+>     )
+>     table.add_column("Tier", style="bold")
+>     table.add_column("Raw", justify="right")
+>     table.add_column("Weight", justify="right")
+>     table.add_column("Effective", justify="right")
+>     table.add_column("Paid")
+>     for tier in cost.tiers:
+>         table.add_row(
+>             tier.name,
+>             f"{tier.raw_tokens}",
+>             f"×{tier.weight:g}",
+>             f"{tier.weighted_tokens:.1f}",
+>             tier.detail,
+>         )
+>     if cost.duplicate_tokens:
+>         spans = ", ".join(f"{s.source} ↔ {s.target}" for s in cost.duplicate_spans[:2])
+>         table.add_row(
+>             "[yellow]recoverable[/yellow]",
+>             f"[yellow]{cost.duplicate_tokens}[/yellow]",
+>             "",
+>             "",
+>             f"[yellow]duplicated prose ({spans}) — paid twice[/yellow]",
+>         )
+>     return table
+  
+  
+> def unified_terminal_text(
+>     result: dict[str, Any], report: QualityReport, cost: CostReport | None = None
+> ) -> str:
+>     """Single cohesive terminal report combining security and quality sections.
+  
+>     Builds from raw graph state (manifest, component_metadata, filtered_findings,
+>     risk_score / risk_severity / risk_recommendation) so both halves share one
+>     header, one component table, and a side-by-side overview.
+>     """
+>     console = Console(record=True, force_terminal=True, width=88, file=StringIO())
+  
+>     manifest: dict[str, Any] = result.get("manifest") or {}
+>     skill_name: str = manifest.get("name") or "unknown"
+>     skill_path: str = result.get("skill_path") or result.get("input_path") or ""
+>     scanned: str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
+  
+>     risk_score: int = result.get("risk_score") or 0
+>     risk_severity: str = (result.get("risk_severity") or "UNKNOWN").upper()
+>     risk_rec: str = result.get("risk_recommendation") or ""
+>     findings: list[Any] = result.get("filtered_findings") or []
+>     components: list[Any] = result.get("component_metadata") or []
+  
+>     version_sub = f"v{_SKILLSPECTOR_VERSION}" if _SKILLSPECTOR_VERSION else ""
+  
+      # ── Header ──────────────────────────────────────────────────────────────
+>     console.print(
+>         Panel(
+>             f"[bold]Skill:[/bold] {skill_name}\n"
+>             f"[bold]Source:[/bold] {skill_path}\n"
+>             f"[bold]Scanned:[/bold] {scanned}",
+>             title="SkillSpector Report",
+>             subtitle=version_sub,
+>         )
+>     )
+  
+      # ── Overview: security + quality side by side ────────────────────────────
+      # Both columns are risk scores: 0 = best, 100 = worst.
+      # Quality risk = 100 - quality score so the direction matches security.
+>     sev_color = _SEV_COLOR.get(risk_severity, "white")
+>     quality_risk = 100 - report.score
+>     qual_color = _score_color(report.score)
+>     qual_severity, qual_rec = _quality_status(report.score)
+  
+>     overview = Table(
+>         show_header=True,
+>         box=box.SIMPLE_HEAD,
+>         title="Overview",
+>         caption="Risk Score: 0 = best  ·  100 = worst",
+>     )
+>     overview.add_column("Dimension", style="bold")
+>     overview.add_column("Risk Score", justify="right")
+>     overview.add_column("Status")
+>     overview.add_row(
+>         "Security",
+>         f"[{sev_color}]{risk_score}/100[/{sev_color}]",
+>         f"[{sev_color}]{risk_severity}  {risk_rec}[/{sev_color}]",
+>     )
+>     overview.add_row(
+>         "Quality",
+>         f"[{qual_color}]{quality_risk}/100[/{qual_color}]",
+>         f"[{qual_color}]{qual_severity}  {qual_rec}[/{qual_color}]",
+>     )
+>     if cost is not None:
+>         cost_tier, cost_rec = cost_status(cost.score)
+>         cc = _score_color(cost.score)
+          # Shown as a risk-style number for column consistency: 0 = cheapest.
+>         overview.add_row(
+>             "Cost",
+>             f"[{cc}]{100 - cost.score}/100[/{cc}]",
+>             f"[{cc}]{cost_tier}  {cost_rec}[/{cc}]",
+>         )
+>     console.print(overview)
+  
+>     if cost is not None:
+>         console.print(_cost_table(cost))
+  
+      # ── Components ───────────────────────────────────────────────────────────
+>     if components:
+>         ct = Table(
+>             title=f"Components ({len(components)})",
+>             show_header=True,
+>             box=box.SIMPLE_HEAD,
+>         )
+>         ct.add_column("File")
+>         ct.add_column("Type")
+>         ct.add_column("Lines", justify="right")
+>         ct.add_column("Executable")
+>         for comp in components:
+>             ct.add_row(
+>                 comp.get("path", ""),
+>                 comp.get("type", ""),
+>                 str(comp.get("lines", "")),
+>                 "[yellow]Yes[/yellow]" if comp.get("executable") else "No",
+>             )
+>         console.print(ct)
+  
+      # ── Security Issues ──────────────────────────────────────────────────────
+>     console.print(f"\n[bold]Security Issues ({len(findings)})[/bold]")
+>     if not findings:
+>         console.print("  [green]No security issues detected.[/green]\n")
+>     else:
+>         for f in findings:
+>             sev = (getattr(f, "severity", "") or "").upper()
+>             fc = _SEV_COLOR.get(sev, "white")
+>             loc = f"{getattr(f, 'file', '')}:{getattr(f, 'start_line', '')}"
+>             pct = int((getattr(f, "confidence", 0) or 0) * 100)
+>             console.print(
+>                 f"\n  [{fc}]{sev}[/{fc}] [{getattr(f, 'rule_id', '')}]  "
+>                 f"{getattr(f, 'message', '')}",
+>                 highlight=False,
+>             )
+>             console.print(f"    [dim]Location: {loc}  |  Confidence: {pct}%[/dim]")
+>             rem = getattr(f, "remediation", "") or ""
+>             if rem:
+>                 console.print(f"    [dim]Remediation: {rem.strip()[:120]}[/dim]")
+  
+      # ── Quality Dimensions ───────────────────────────────────────────────────
+>     console.print("\n[bold]Quality Dimensions[/bold]")
+>     for c in report.categories:
+>         mark = (
+>             "[green]+[/green]"
+>             if c.earned == c.max
+>             else ("[yellow]~[/yellow]" if c.earned > 0 else "[red]x[/red]")
+>         )
+>         kind_tag = r"[dim]\[F][/dim]" if c.kind == "frontmatter" else r"[dim]\[B][/dim]"
+>         console.print(f"  {mark} {c.earned:>2}/{c.max:<2}  {kind_tag}  {c.name}")
+>         for _, _, label in c.items:
+>             console.print(f"      [dim]{label}[/dim]")
+>         if c.notes:
+>             console.print(f"      [cyan]tip:[/cyan] {c.notes}")
+>     console.print(
+>         "\n  [dim][F] frontmatter — raises score; "
+>         "no effect on token spend  "
+>         "[B] prompt body — raises score AND reduces token spend[/dim]"
+>     )
+>     if report.gate_violations:
+>         console.print("\n[bold red]Strict gate failures[/bold red]")
+>         for v in report.gate_violations:
+>             console.print(f"  [red]x[/red] {v}")
+>     console.print(f"\n  [dim]{QUALITY_CAVEAT}[/dim]")
+  
+>     return console.export_text()
+  
+  
+  # --------------------------------------------------------------------------- #
+  # Non-terminal formats (unchanged structure)                                  #
+  # --------------------------------------------------------------------------- #
+  
+  
+> def cost_markdown_section(cost: CostReport) -> str:
+>     """Markdown '## Token Cost' section — a separate axis from quality."""
+>     tier, rec = cost_status(cost.score)
+>     lines = [
+>         "\n## Token Cost\n",
+>         f"**Score:** {cost.score}/100 ({tier} — {rec})  ",
+>         f"**Weighted total:** {cost.weighted_total:.0f} tokens ({cost.raw_total} raw)  ",
+>         "",
+>         "| Tier | Raw tokens | Weight | Effective | Paid |",
+>         "|------|-----------:|-------:|----------:|------|",
+>     ]
+>     for t in cost.tiers:
+>         lines.append(
+>             f"| {t.name} | {t.raw_tokens} | ×{t.weight:g} | {t.weighted_tokens:.1f} | {t.detail} |"
+>         )
+>     lines.append("")
+>     if cost.duplicate_tokens:
+>         lines.append(
+>             f"**Recoverable:** ~{cost.duplicate_tokens} tokens of duplicated prose, paid twice:"
+>         )
+>         for s in cost.duplicate_spans[:5]:
+>             lines.append(f"- `{s.source}` ↔ `{s.target}` (~{s.shared_tokens} tokens)")
+>         lines.append("")
+>     lines.append(
+>         "> Cost is scored independently of quality: across 207 real skills the two correlate "
+>         "at only +0.14, so a high quality score does not imply a cheap skill."
+>     )
+>     return "\n".join(lines)
+  
+  
+> def quality_markdown_section(report: QualityReport) -> str:
+>     """Markdown '## Quality Assessment' section appended to the security report."""
+>     lines: list[str] = []
+>     lines.append("\n## Quality Assessment\n")
+>     lines.append(f"**Score:** {report.score}/100  ")
+>     lines.append("")
+>     lines.append("| Category | Kind | Score |")
+>     lines.append("|----------|------|-------|")
+>     for c in report.categories:
+>         kind_label = "frontmatter" if c.kind == "frontmatter" else "body"
+>         lines.append(f"| {c.name} | {kind_label} | {c.earned}/{c.max} |")
+>     lines.append("")
+>     notes = [(c.name, c.notes) for c in report.categories if c.notes]
+>     if notes:
+>         lines.append("### Suggestions\n")
+>         for name, note in notes:
+>             lines.append(f"- **{name}:** {note}")
+>         lines.append("")
+>     if report.gate_violations:
+>         lines.append("### Strict gate failures\n")
+>         for v in report.gate_violations:
+>             lines.append(f"- {v}")
+>         lines.append("")
+>     lines.append(f"> {QUALITY_CAVEAT}")
+>     lines.append("")
+>     return "\n".join(lines)
+  
+  
+> def quality_json_dict(report: QualityReport) -> dict[str, object]:
+>     """JSON 'quality_assessment' object (sibling of risk_assessment)."""
+>     data = report.to_dict()
+>     data["caveat"] = QUALITY_CAVEAT
+>     return data
+  
+  
+> def quality_sarif_properties(report: QualityReport) -> dict[str, object]:
+>     """Compact summary for SARIF runs[0].properties.quality (not a result)."""
+>     return {
+>         "score": report.score,
+>         "categories": {c.name: {"earned": c.earned, "max": c.max} for c in report.categories},
+>     }

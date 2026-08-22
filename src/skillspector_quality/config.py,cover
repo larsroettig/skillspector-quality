@@ -1,0 +1,124 @@
+> """Scoring configuration: per-dimension and per-sub-check ``disable`` / ``strict`` controls.
+  
+> Precedence: ``pyproject.toml`` / ``.skillspector.toml`` set project defaults; CLI flags merge
+> on top (union). Ids are normalized so a dimension can be named either by its display name
+> ("Information Density") or a slug ("information-density"); sub-checks use dotted ids
+> ("link.broken"). See docs/adr/0006-configurable-scoring.md.
+> """
+  
+> from __future__ import annotations
+  
+> import logging
+> import re
+> import tomllib
+> from dataclasses import dataclass
+> from pathlib import Path
+  
+> logger = logging.getLogger(__name__)
+  
+> _CONFIG_TABLE = "skillspector-quality"  # [tool.skillspector-quality] / [skillspector-quality]
+  
+  
+> def _norm(s: str) -> str:
+>     """Canonicalize an id: lowercase, ``&``/whitespace/punctuation → ``-``, dots kept.
+  
+>     "Metadata & Discovery" -> "metadata-discovery"; "Information Density" ->
+>     "information-density"; "link.broken" -> "link.broken".
+>     """
+>     s = s.strip().lower().replace("&", " ")
+>     s = re.sub(r"[^a-z0-9.]+", "-", s).strip("-")
+>     return s
+  
+  
+> def _split(values: list[str] | tuple[str, ...]) -> list[str]:
+>     """Flatten a list of strings that may themselves be comma-separated."""
+>     out: list[str] = []
+>     for v in values:
+>         out.extend(part for part in str(v).split(",") if part.strip())
+>     return out
+  
+  
+> @dataclass(frozen=True)
+> class ScoringConfig:
+>     """Normalized set of disabled and strict ids (dimensions and sub-checks)."""
+  
+>     disabled: frozenset[str] = frozenset()
+>     strict: frozenset[str] = frozenset()
+  
+>     def is_disabled(self, *ids: str) -> bool:
+>         return any(_norm(i) in self.disabled for i in ids)
+  
+>     def is_strict(self, *ids: str) -> bool:
+>         return any(_norm(i) in self.strict for i in ids)
+  
+>     def unknown_ids(self, known: set[str]) -> set[str]:
+>         """Ids in this config that match no known dimension slug or sub-check id."""
+>         known_norm = {_norm(k) for k in known}
+>         return {i for i in (self.disabled | self.strict) if i not in known_norm}
+  
+>     @classmethod
+>     def from_lists(
+>         cls, disable: list[str] | tuple[str, ...], strict: list[str] | tuple[str, ...]
+>     ) -> ScoringConfig:
+>         return cls(
+>             disabled=frozenset(_norm(x) for x in _split(disable)),
+>             strict=frozenset(_norm(x) for x in _split(strict)),
+>         )
+  
+>     @classmethod
+>     def load(
+>         cls,
+>         root: Path | str | None = None,
+>         cli_disable: list[str] | tuple[str, ...] = (),
+>         cli_strict: list[str] | tuple[str, ...] = (),
+>     ) -> ScoringConfig:
+>         """Build config from project files plus CLI overrides (union).
+  
+>         Reads ``pyproject.toml`` (``[tool.skillspector-quality]``) and ``.skillspector.toml``
+>         (``[skillspector-quality]`` or top-level keys) under ``root``, then unions in the CLI
+>         lists. Missing/unparseable files are ignored.
+>         """
+>         base = Path(root) if root is not None else Path.cwd()
+>         f_disable: list[str] = []
+>         f_strict: list[str] = []
+  
+>         py = base / "pyproject.toml"
+>         if py.is_file():
+>             d, s = _read_table(py, ("tool", _CONFIG_TABLE))
+>             f_disable += d
+>             f_strict += s
+  
+>         ss = base / ".skillspector.toml"
+>         if ss.is_file():
+              # accept top-level keys or a [skillspector-quality] table
+>             d, s = _read_table(ss, ())
+>             d2, s2 = _read_table(ss, (_CONFIG_TABLE,))
+>             f_disable += d + d2
+>             f_strict += s + s2
+  
+>         return cls.from_lists(
+>             disable=[*f_disable, *_split(cli_disable)],
+>             strict=[*f_strict, *_split(cli_strict)],
+>         )
+  
+  
+> def _read_table(path: Path, table: tuple[str, ...]) -> tuple[list[str], list[str]]:
+>     """Return (disable, strict) string lists from a TOML table path; [] on any error."""
+>     try:
+>         data: dict[str, object] = tomllib.loads(path.read_text(encoding="utf-8"))
+>     except (OSError, tomllib.TOMLDecodeError) as exc:
+>         logger.debug("skipping config %s: %s", path, exc)
+>         return [], []
+>     node: object = data
+>     for key in table:
+>         if not isinstance(node, dict) or key not in node:
+>             return [], []
+>         node = node[key]
+>     if not isinstance(node, dict):
+>         return [], []
+>     disable = node.get("disable", []) or []
+>     strict = node.get("strict", []) or []
+>     if not isinstance(disable, list) or not isinstance(strict, list):
+>         logger.debug("config %s: disable/strict must be arrays", path)
+>         return [], []
+>     return [str(x) for x in disable], [str(x) for x in strict]
