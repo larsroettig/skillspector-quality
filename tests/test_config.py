@@ -162,6 +162,22 @@ def test_load_defaults_to_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
 
 # --------------------------------------------------------------------------- #
+# score_quality — unknown id warning
+# --------------------------------------------------------------------------- #
+
+
+def test_score_quality_warns_on_unknown_scoring_id(caplog: pytest.LogCaptureFixture) -> None:
+    """A disable/strict id that matches no known dimension or sub-check logs a warning
+    instead of silently doing nothing, so a typo'd id is noticed."""
+    from skillspector_quality.quality import score_quality
+
+    config = ScoringConfig.from_lists(disable=["not-a-real-dimension"], strict=[])
+    with caplog.at_level("WARNING"):
+        score_quality({"SKILL.md": "---\nname: x\n---\nBody text.\n"}, config)
+    assert any("not-a-real-dimension" in r.message for r in caplog.records)
+
+
+# --------------------------------------------------------------------------- #
 # python -m skillspector_quality
 # --------------------------------------------------------------------------- #
 

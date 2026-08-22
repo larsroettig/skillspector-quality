@@ -93,6 +93,12 @@ def test_cost_tiers_map_to_population_position(score: int, tier: str) -> None:
     assert cost_status(score)[0] == tier
 
 
+def test_cost_status_fallback_below_lowest_threshold() -> None:
+    """A score below every listed threshold (defensive: scores are normally 0-100) still
+    resolves to the worst tier via the trailing fallback return."""
+    assert cost_status(-1) == ("BLOATED", "COSTS MORE THAN IT LIKELY RETURNS")
+
+
 def test_estimate_tokens_is_proportional_not_exact() -> None:
     """A consistent constant factor is enough: the score is a percentile rank."""
     assert estimate_tokens("") == 0

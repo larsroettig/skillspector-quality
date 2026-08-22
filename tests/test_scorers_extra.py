@@ -7,6 +7,7 @@ from skillspector_quality.quality.scorers import (
     _body,
     _compression_ratio,
     _hdd,
+    _hedge_density,
     _is_acyclic,
     _mtld,
     _ngram_dup,
@@ -263,6 +264,35 @@ def test_dim_topic_coverage_description_mismatch() -> None:
     assert "match" in label.lower() or "description" in label.lower()
 
 
+def test_dim_topic_coverage_mismatch_with_markdown_docs() -> None:
+    """With supporting docs present, a mismatched description hits the cohesion-blended branch."""
+    skill = (
+        "---\nname: foo\ndescription: machine learning model training\n---\n"
+        + "gardening soil fertilizer plants vegetables tomatoes cucumber sunflower " * 20
+    )
+    doc = _doc(
+        skill,
+        **{"ref.md": "gardening soil fertilizer plants vegetables tomatoes cucumber sunflower " * 20},
+    )
+    items = dim_topic_coverage(doc, 15)
+    assert items
+    _, _, label = items[0]
+    assert "doesn't match" in label
+
+
+def test_dim_topic_coverage_strong_alignment_no_markdown_docs() -> None:
+    """A description that closely echoes the body earns the 'aligns well' label."""
+    skill = (
+        "---\nname: foo\ndescription: gardening soil fertilizer plants vegetables tomatoes\n---\n"
+        + "gardening soil fertilizer plants vegetables tomatoes cucumber sunflower " * 20
+    )
+    doc = _doc(skill)
+    items = dim_topic_coverage(doc, 15)
+    assert items
+    _, _, label = items[0]
+    assert label == "Description aligns well with skill content"
+
+
 # ── dim_structural_coherence ──────────────────────────────────────────────────
 
 def test_dim_structural_coherence_circular_links() -> None:
@@ -309,6 +339,31 @@ def test_dim_example_quality_examples_without_pairs() -> None:
     assert items
     _, _, label = items[0]
     assert "input/output" in label.lower() or "example" in label.lower()
+
+
+def test_dim_example_quality_rich_and_deep_earns_full_label() -> None:
+    """A demo with input/output framing and substantial length earns the top label."""
+    long_words = "context word " * 45
+    example = f"## Example\nInput:\n{long_words}\nOutput:\n{long_words}\n"
+    doc = _doc("---\nname: foo\ndescription: bar\n---\n" + "word " * 120 + "\n" + example)
+    items = dim_example_quality(doc, 10)
+    assert items
+    _, _, label = items[0]
+    assert "clear input/output" in label
+
+
+def test_dim_example_quality_low_richness_shows_one_side_label() -> None:
+    """Demos that are prose-only (no fences, no input/output/before-after cues) score low
+    richness and get the 'shows only one side' guidance."""
+    weak = (
+        "## Example one\nJust prose describing something without any code fences here.\n"
+        "## Example two\nAnother prose block describing something without code here too.\n"
+    )
+    doc = _doc("---\nname: foo\ndescription: bar\n---\n" + "word " * 120 + "\n" + weak)
+    items = dim_example_quality(doc, 10)
+    assert items
+    _, _, label = items[0]
+    assert "only one side" in label
 
 
 # ── dim_progressive_disclosure ────────────────────────────────────────────────
@@ -358,3 +413,12 @@ def test_dim_behavioral_config_invalid_effort() -> None:
     doc = _doc(skill)
     items = dim_behavioral_config(doc, 10)
     assert any("effort" in label for _, _, label in items)
+
+
+# ── _hedge_density ─────────────────────────────────────────────────────────────
+
+
+def test_hedge_density_empty_prose_returns_zero() -> None:
+    """No tokens at all (empty prose) short-circuits to 0.0 rather than dividing by zero."""
+    assert _hedge_density("") == 0.0
+    assert _hedge_density("   \n\n  ") == 0.0

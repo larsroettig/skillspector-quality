@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from skillspector_quality.quality.cost import CostReport, CostTier
 from skillspector_quality.quality.models import CategoryScore, QualityReport
 from skillspector_quality.quality.render import (
     _quality_status,
     _score_color,
+    cost_markdown_section,
     quality_json_dict,
     quality_markdown_section,
     quality_sarif_properties,
@@ -89,6 +91,12 @@ def test_quality_status_excellent_is_top_decile() -> None:
 def test_quality_status_critical() -> None:
     sev, _ = _quality_status(10)
     assert sev == "CRITICAL"
+
+
+def test_quality_status_fallback_below_lowest_threshold() -> None:
+    """A score below every listed threshold still resolves via the trailing fallback."""
+    sev, rec = _quality_status(-1)
+    assert (sev, rec) == ("CRITICAL", "NOT READY")
 
 
 # ── unified_terminal_text ─────────────────────────────────────────────────────
@@ -194,3 +202,45 @@ def test_sarif_properties_structure() -> None:
     assert props["score"] == 82
     assert "categories" in props
     assert "Metadata & Discovery" in props["categories"]
+
+
+# ── recoverable / duplicate-token rows ────────────────────────────────────────
+
+
+def _cost_with_duplicates() -> CostReport:
+    from skillspector_quality.quality.scorers import DuplicateSpan
+
+    return CostReport(
+        score=60,
+        tiers=[CostTier(name="always-on", detail="description", raw_tokens=50, weight=1.0)],
+        weighted_total=50.0,
+        duplicate_tokens=40,
+        duplicate_spans=[DuplicateSpan(source="SKILL.md", target="reference.md", shared_tokens=40)],
+    )
+
+
+def test_terminal_cost_table_shows_recoverable_row() -> None:
+    report = _report(80)
+    cost = _cost_with_duplicates()
+    text = unified_terminal_text({"risk_score": 0, "filtered_findings": []}, report, cost)
+    assert "recoverable" in text
+    assert "SKILL.md" in text
+    assert "reference.md" in text
+
+
+def test_markdown_cost_section_shows_recoverable() -> None:
+    cost = _cost_with_duplicates()
+    md = cost_markdown_section(cost)
+    assert "Recoverable" in md
+    assert "SKILL.md" in md
+    assert "reference.md" in md
+
+
+# ── strict gate failures (markdown) ───────────────────────────────────────────
+
+
+def test_markdown_section_with_gate_violations() -> None:
+    report = QualityReport(score=50, categories=[], gate_violations=["link.broken: 1 broken link"])
+    md = quality_markdown_section(report)
+    assert "### Strict gate failures" in md
+    assert "link.broken: 1 broken link" in md
